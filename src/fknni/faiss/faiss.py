@@ -1,7 +1,4 @@
-from anndata import AnnData
-
-
-def basic_tool(adata: AnnData) -> int:
+def basic_tool() -> int:
     """Run a tool on the AnnData object.
 
     Parameters

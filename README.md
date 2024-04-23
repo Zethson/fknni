@@ -1,13 +1,15 @@
-# fast-knn-imputation
+# fknni
 
 [![Tests][badge-tests]][link-tests]
 [![Documentation][badge-docs]][link-docs]
 
-[badge-tests]: https://img.shields.io/github/actions/workflow/status/zethson/fast-knn-imputation/test.yaml?branch=main
-[link-tests]: https://github.com/zethson/fast-knn-imputation/actions/workflows/test.yml
-[badge-docs]: https://img.shields.io/readthedocs/fast-knn-imputation
+[badge-tests]: https://img.shields.io/github/actions/workflow/status/zethson/fknni/test.yaml?branch=main
+[link-tests]: https://github.com/zethson/fknni/actions/workflows/test.yml
+[badge-docs]: https://img.shields.io/readthedocs/fknni
 
-Fast implementations of KNN imputation.
+Fast implementations of KNN imputation using faiss.
+Might support more backends and GPUs in the future.
+Help is more than welcome!
 
 ## Getting started
 
@@ -20,20 +22,16 @@ Please refer to the [documentation][link-docs]. In particular, the
 You need to have Python 3.9 or newer installed on your system. If you don't have
 Python installed, we recommend installing [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge).
 
-There are several alternative options to install fast-knn-imputation:
-
-<!--
-1) Install the latest release of `fast-knn-imputation` from `PyPI <https://pypi.org/project/fast-knn-imputation/>`_:
+Install the latest release of `fknni` from `PyPI <https://pypi.org/project/fknni/>`\_:
 
 ```bash
-pip install fast-knn-imputation
+pip install fknni
 ```
--->
 
-1. Install the latest development version:
+Install the latest development version:
 
 ```bash
-pip install git+https://github.com/zethson/fast-knn-imputation.git@main
+pip install git+https://github.com/zethson/fknni.git@main
 ```
 
 ## Release notes
@@ -42,15 +40,9 @@ See the [changelog][changelog].
 
 ## Contact
 
-For questions and help requests, you can reach out in the [scverse discourse][scverse-discourse].
 If you found a bug, please use the [issue tracker][issue-tracker].
 
-## Citation
-
-> t.b.a
-
-[scverse-discourse]: https://discourse.scverse.org/
-[issue-tracker]: https://github.com/zethson/fast-knn-imputation/issues
-[changelog]: https://fast-knn-imputation.readthedocs.io/latest/changelog.html
-[link-docs]: https://fast-knn-imputation.readthedocs.io
-[link-api]: https://fast-knn-imputation.readthedocs.io/latest/api.html
+[issue-tracker]: https://github.com/zethson/fknni/issues
+[changelog]: https://fknni.readthedocs.io/latest/changelog.html
+[link-docs]: https://fknni.readthedocs.io
+[link-api]: https://fknni.readthedocs.io/latest/api.html

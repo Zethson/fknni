@@ -4,13 +4,13 @@
   "checkout": null,
   "context": {
     "cookiecutter": {
-      "project_name": "fast-knn-imputation",
-      "package_name": "fast_knn_imputation",
+      "project_name": "fknni",
+      "package_name": "fknni",
       "project_description": "Fast implementations of KNN imputation.",
       "author_full_name": "Lukas Heumos",
       "author_email": "lukas.heumos@posteo.net",
       "github_user": "zethson",
-      "project_repo": "https://github.com/zethson/fast-knn-imputation",
+      "project_repo": "https://github.com/zethson/fknni",
       "license": "Apache License Version 2.0",
       "_copy_without_render": [
         ".github/workflows/build.yaml",

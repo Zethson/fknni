@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose a new feature for fast-knn-imputation
+description: Propose a new feature for fknni
 labels: enhancement
 body:
   - type: textarea

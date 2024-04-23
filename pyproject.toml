@@ -3,7 +3,7 @@ build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [project]
-name = "fast-knn-imputation"
+name = "fknni"
 version = "0.0.1"
 description = "Fast implementations of KNN imputation."
 readme = "README.md"
@@ -15,13 +15,11 @@ authors = [
 maintainers = [
     {name = "Lukas Heumos", email = "lukas.heumos@posteo.net"},
 ]
-urls.Documentation = "https://fast-knn-imputation.readthedocs.io/"
-urls.Source = "https://github.com/zethson/fast-knn-imputation"
-urls.Home-page = "https://github.com/zethson/fast-knn-imputation"
+urls.Documentation = "https://fknni.readthedocs.io/"
+urls.Source = "https://github.com/zethson/fknni"
+urls.Home-page = "https://github.com/zethson/fknni"
 dependencies = [
-    "anndata",
-    # for debug logging (referenced from the issue template)
-    "session-info",
+    "faiss-cpu",
 ]
 
 [project.optional-dependencies]
