@@ -1,1 +1,1 @@
-from .faiss import basic_tool
+from .faiss import FaissImputer
