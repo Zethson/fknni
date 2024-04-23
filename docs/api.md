@@ -3,8 +3,8 @@
 ## Tools
 
 ```{eval-rst}
-.. module:: fknni.faiss.faiss
-.. currentmodule:: fknni.faiss.faiss
+.. module:: fknni.faiss
+.. currentmodule:: fknni.faiss
 
 .. autosummary::
     :toctree: generated
