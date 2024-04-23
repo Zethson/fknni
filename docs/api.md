@@ -9,5 +9,5 @@
 .. autosummary::
     :toctree: generated
 
-    fknni.faiss.basic_tool
+    fknni.faiss.FaissImputer
 ```
