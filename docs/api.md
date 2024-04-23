@@ -3,11 +3,11 @@
 ## Tools
 
 ```{eval-rst}
-.. module:: fknni.faiss
-.. currentmodule:: fknni
+.. module:: fknni.faiss.faiss
+.. currentmodule:: fknni.faiss.faiss
 
 .. autosummary::
     :toctree: generated
 
-    fknni.faiss.FaissImputer
+    FaissImputer
 ```
