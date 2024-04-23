@@ -35,7 +35,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         """Fits the FaissImputer to the provided data.
 
         Args:
-            X: Input data with potential missing values. Expected to be either a NumPy array or a pandas DataFrame.
+            X: Input data with potential missing values.
             y: Ignored, present for compatibility with sklearn's TransformerMixin.
 
         Raises:
