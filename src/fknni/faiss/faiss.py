@@ -40,9 +40,6 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
         Raises:
             ValueError: If any parameters are set to an invalid value.
-
-        Returns:
-            self: Instance with fitted data.
         """
         X = check_array(X, dtype=np.float32, force_all_finite="allow-nan")
 
