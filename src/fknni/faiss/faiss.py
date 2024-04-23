@@ -71,7 +71,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             X: Data with missing values to impute. Expected to be either a NumPy array or a pandas DataFrame.
 
         Returns:
-            X_imputed: Data with imputed values as a NumPy array.
+            Data with imputed values as a NumPy array.
         """
         X = check_array(X, dtype=np.float32, force_all_finite="allow-nan")
         check_is_fitted(self, "index_")
