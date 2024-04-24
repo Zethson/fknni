@@ -8,22 +8,24 @@ from sklearn.utils.validation import check_array, check_is_fitted
 
 
 class FaissImputer(BaseEstimator, TransformerMixin):
-    """Imputer for completing missing values using Faiss."""
+    """Imputer for completing missing values using Faiss, incorporating weighted averages based on distance."""
 
     def __init__(
         self,
-        n_neighbors: int = 3,
+        n_neighbors: int = 5,
         metric: Literal["l2", "ip"] = "l2",
-        strategy: Literal["mean", "median"] = "mean",
+        strategy: Literal["mean", "median", "weighted"] = "weighted",
         index_factory: str = "Flat",
     ):
-        """Initializes FaissImputer with specified parameters.
+        """Initializes FaissImputer with specified parameters that are used for the imputation.
 
         Args:
-            n_neighbors: Number of neighbors to use for imputation.
-            metric: Distance metric to use for neighbor search.
-            strategy: Method to compute imputed values.
-            index_factory: Description of the Faiss index type to build.
+            n_neighbors: Number of neighbors to use for imputation. Defaults to 5.
+            metric: Distance metric to use for neighbor search. Defaults to 'l2'.
+            strategy: Method to compute imputed values among neighbors.
+                      The weighted strategy is similar to scikt-learn's implementation,
+                      where closer neighbors have a higher influence on the imputation.
+            index_factory: Description of the Faiss index type to build. Defaults to 'Flat'.
         """
         super().__init__()
         self.n_neighbors = n_neighbors
@@ -39,19 +41,14 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             y: Ignored, present for compatibility with sklearn's TransformerMixin.
 
         Raises:
-            ValueError: If any parameters are set to an invalid value.
+          ValueError: If any parameters are set to an invalid value.
         """
-        X = check_array(X, dtype=np.float32, force_all_finite="allow-nan")
+        X = check_array(X, force_all_finite="allow-nan")
+        self.input_dtype_ = X.dtype
 
-        if not isinstance(self.n_neighbors, int) or self.n_neighbors <= 0:
-            raise ValueError("n_neighbors must be a positive integer")
-        if self.metric not in {"l2", "ip"}:
-            raise ValueError("metric must be either 'l2' or 'ip'")
-        if self.strategy not in {"mean", "median"}:
-            raise ValueError("strategy must be either 'mean' or 'median'")
-
-        mask = ~np.isnan(X).any(axis=1)
-        X_non_missing = X[mask]
+        # Handle missing values for indexing
+        self.means_ = np.nanmean(X, axis=0)  # Store means for missing value handling
+        X_non_missing = np.where(np.isnan(X), self.means_, X).astype(np.float32)
 
         index = faiss.index_factory(
             X_non_missing.shape[1],
@@ -71,28 +68,49 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             X: Data with missing values to impute. Expected to be either a NumPy array or a pandas DataFrame.
 
         Returns:
-            Data with imputed values as a NumPy array.
+            Data with imputed values as a NumPy array of the original data type.
         """
-        X = check_array(X, dtype=np.float32, force_all_finite="allow-nan")
+        X = check_array(X, force_all_finite="allow-nan")
         check_is_fitted(self, "index_")
-        X_imputed = np.array(X, copy=True)
+        X_imputed = np.array(X, dtype=np.float32)  # Use float32 for processing
         missing_mask = np.isnan(X_imputed)
 
-        placeholder_values = (
-            np.nanmean(X_imputed, axis=0) if self.strategy == "mean" else np.nanmedian(X_imputed, axis=0)
-        )
+        X_filled = np.where(missing_mask, self.means_, X_imputed)
 
         for sample_idx in np.where(missing_mask.any(axis=1))[0]:
-            sample_row = X_imputed[sample_idx, :]
+            sample_row_filled = X_filled[sample_idx]
             sample_missing_cols = np.where(missing_mask[sample_idx])[0]
-            sample_row[sample_missing_cols] = placeholder_values[sample_missing_cols]
 
-            _, neighbor_indices = self.index_.search(sample_row.reshape(1, -1), self.n_neighbors)
-            selected_values = X_imputed[neighbor_indices[0], :][:, sample_missing_cols]
+            distances, neighbor_indices = self.index_.search(sample_row_filled.reshape(1, -1), self.n_neighbors)
+            neighbors = X_filled[neighbor_indices[0]]
 
-            sample_row[sample_missing_cols] = (
-                np.mean(selected_values, axis=0) if self.strategy == "mean" else np.median(selected_values, axis=0)
-            )
-            X_imputed[sample_idx, :] = sample_row
+            for col in sample_missing_cols:
+                valid_neighbors = neighbors[:, col][~np.isnan(neighbors[:, col])]
+                valid_distances = distances[0, : len(valid_neighbors)]
 
-        return X_imputed
+                if len(valid_neighbors) < self.n_neighbors:
+                    if len(valid_neighbors) == 0:
+                        imputed_value = self.means_[col]
+                    else:
+                        if self.strategy in {"mean", "weighted"}:
+                            weights = (
+                                1 / (1 + valid_distances)
+                                if self.strategy == "weighted"
+                                else np.ones_like(valid_distances)
+                            )
+                            imputed_value = np.average(valid_neighbors, weights=weights)
+                        elif self.strategy == "median":
+                            imputed_value = np.median(valid_neighbors)
+                else:
+                    if self.strategy == "mean":
+                        imputed_value = np.mean(valid_neighbors)
+                    elif self.strategy == "median":
+                        imputed_value = np.median(valid_neighbors)
+                    elif self.strategy == "weighted":
+                        small_constant = 1e-10  # Small constant to prevent division by zero
+                        weights = 1 / (valid_distances + small_constant)
+                        imputed_value = np.average(valid_neighbors, weights=weights)
+
+                X_imputed[sample_idx, col] = imputed_value
+
+        return X_imputed.astype(self.input_dtype_)  # Cast back to the original input dtype

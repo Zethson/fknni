@@ -41,11 +41,11 @@ doc = [
     "ipykernel",
     "ipython",
     "sphinx-copybutton",
+    "matplotlib"
 ]
 test = [
     "pytest",
     "coverage",
-    "pandas",
 ]
 
 [tool.coverage.run]
