@@ -25,7 +25,7 @@ Please refer to the [documentation][link-docs]. In particular, the
 You need to have Python 3.10 or newer installed on your system.
 If you don't have Python installed, we recommend installing [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge).
 
-Install the latest release of `fknni` from `PyPI <https://pypi.org/project/fknni/>`\_:
+Install the latest release of `fknni` from [PyPI](https://pypi.org/project/fknni):
 
 ```bash
 pip install fknni
