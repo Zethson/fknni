@@ -18,6 +18,7 @@ Help is more than welcome!
 Please refer to the [documentation][link-docs]. In particular, the
 
 -   [API documentation][link-api].
+-   [Faiss example notebook][link-faiss-example].
 
 ## Installation
 
@@ -48,3 +49,4 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 [changelog]: https://fknni.readthedocs.io/latest/changelog.html
 [link-docs]: https://fknni.readthedocs.io
 [link-api]: https://fknni.readthedocs.io/latest/api.html
+[link-faiss-example]: https://fknni.readthedocs.io/en/latest/notebooks/faiss.html
