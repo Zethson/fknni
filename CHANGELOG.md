@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning][].
 
 ## [1.0.0]
 
+-   Fixed mean imputation
+
+## [1.0.0]
+
 ### Added
 
 -   First implementation of FaissImputer
