@@ -73,35 +73,35 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         """
         X = check_array(X, dtype=np.float32, force_all_finite="allow-nan")
         check_is_fitted(self)
-        missing_mask = np.isnan(X)
+        is_value_missing = np.isnan(X)
 
-        for sample_idx in np.where(missing_mask.any(axis=1))[0]:
-            sample_row = X[sample_idx]
-            sample_missing_mask = missing_mask[sample_idx]
-            sample_missing_cols = np.where(sample_missing_mask)[0]
-            sample_row[sample_missing_mask] = self.global_fallbacks_[sample_missing_mask]
+        for sample_index in np.where(is_value_missing.any(axis=1))[0]:
+            sample_data = X[sample_index]
+            missing_value_mask = is_value_missing[sample_index]
+            missing_columns = np.where(missing_value_mask)[0]
+            sample_data[missing_value_mask] = self.global_fallbacks_[missing_value_mask]
 
-            distances, neighbor_indices = self.index_.search(sample_row.reshape(1, -1), self.n_neighbors)
-            selected_vectors = X[neighbor_indices[0]]
-            selected_values = selected_vectors[:, sample_missing_cols]
+            distances, neighbor_indices = self.index_.search(sample_data.reshape(1, -1), self.n_neighbors)
+            neighbors_data = X[neighbor_indices[0]]
+            neighbor_values = neighbors_data[:, missing_columns]
 
-            if self.strategy in ["mean", "median"]:
-                if self.strategy == "mean":
-                    imputed_values = np.nanmean(selected_values, axis=0)
-                else:
-                    imputed_values = np.nanmedian(selected_values, axis=0)
+            if self.strategy == "mean":
+                imputed_values = np.nanmean(neighbor_values, axis=0)
+            elif self.strategy == "median":
+                imputed_values = np.nanmedian(neighbor_values, axis=0)
             elif self.strategy == "weighted":
                 weights = 1 / (distances[0] + 1e-10)
-                valid_weights = weights[:, np.newaxis]
-                weighted_sums = np.nansum(selected_values * valid_weights, axis=0)
-                total_weights = np.nansum(valid_weights, axis=0)
-                imputed_values = weighted_sums / total_weights
-                fallback_condition = total_weights == 0
-                if fallback_condition.any():
-                    fallback_values = self.global_fallbacks_[sample_missing_cols][fallback_condition]
-                    imputed_values[fallback_condition] = fallback_values
+                adjusted_weights = weights[:, np.newaxis]
+                weighted_totals = np.nansum(neighbor_values * adjusted_weights, axis=0)
+                total_weights = np.nansum(adjusted_weights, axis=0)
+                imputed_values = weighted_totals / total_weights
 
-            sample_row[sample_missing_cols] = imputed_values
-            X[sample_idx] = sample_row
+                no_weight_conditions = total_weights == 0
+                if no_weight_conditions.any():
+                    fallback_values = self.global_fallbacks_[missing_columns][no_weight_conditions]
+                    imputed_values[no_weight_conditions] = fallback_values
+
+            sample_data[missing_columns] = imputed_values
+            X[sample_index] = sample_data
 
         return X
