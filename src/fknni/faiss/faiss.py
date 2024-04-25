@@ -14,7 +14,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         self,
         n_neighbors: int = 5,
         metric: Literal["l2", "ip"] = "l2",
-        strategy: Literal["mean", "median", "weighted"] = "weighted",
+        strategy: Literal["mean", "median", "weighted"] = "mean",
         index_factory: str = "Flat",
     ):
         """Initializes FaissImputer with specified parameters that are used for the imputation.
