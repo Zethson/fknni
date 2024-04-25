@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Union
 
 import faiss
 import numpy as np
@@ -12,14 +12,17 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
+        missing_values: Union[int, float, str, None] = np.nan,
         n_neighbors: int = 5,
+        *,
         metric: Literal["l2", "ip"] = "l2",
-        strategy: Literal["mean", "median", "weighted"] = "weighted",
+        strategy: Literal["mean", "median", "weighted"] = "mean",
         index_factory: str = "Flat",
     ):
         """Initializes FaissImputer with specified parameters that are used for the imputation.
 
         Args:
+            missing_values: The missing value to impute. Defaults to np.nan.
             n_neighbors: Number of neighbors to use for imputation. Defaults to 5.
             metric: Distance metric to use for neighbor search. Defaults to 'l2'.
             strategy: Method to compute imputed values among neighbors.
@@ -28,6 +31,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             index_factory: Description of the Faiss index type to build. Defaults to 'Flat'.
         """
         super().__init__()
+        self.missing_values = missing_values
         self.n_neighbors = n_neighbors
         self.metric = metric
         self.strategy = strategy
@@ -43,21 +47,27 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         Raises:
           ValueError: If any parameters are set to an invalid value.
         """
-        X = check_array(X, force_all_finite="allow-nan")
-        self.input_dtype_ = X.dtype
+        X = np.asarray(X, dtype=np.float32)
+        if isinstance(X, pd.DataFrame):
+            X = X.replace(self.missing_values, np.nan).values
+        else:
+            X = np.where(X == self.missing_values, np.nan, X)
 
-        # Handle missing values for indexing
-        self.means_ = np.nanmean(X, axis=0)  # Store means for missing value handling
-        X_non_missing = np.where(np.isnan(X), self.means_, X).astype(np.float32)
+        if np.isnan(X).all(axis=0).any():
+            raise ValueError("Features with all values missing cannot be handled.")
 
-        index = faiss.index_factory(
-            X_non_missing.shape[1],
-            self.index_factory,
-            faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNER_PRODUCT,
-        )
+        mask = ~np.isnan(X).any(axis=1)
+        X_non_missing = X[mask]
+
+        index = faiss.index_factory(X_non_missing.shape[1], self.index_factory)
+        index.metric_type = faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNER_PRODUCT
         index.train(X_non_missing)
         index.add(X_non_missing)
+
         self.index_ = index
+        self.global_fallbacks_ = (
+            np.nanmean(X, axis=0) if self.strategy in ["mean", "weighted"] else np.nanmedian(X, axis=0)
+        )
 
         return self
 
@@ -70,47 +80,37 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         Returns:
             Data with imputed values as a NumPy array of the original data type.
         """
-        X = check_array(X, force_all_finite="allow-nan")
-        check_is_fitted(self, "index_")
-        X_imputed = np.array(X, dtype=np.float32)  # Use float32 for processing
-        missing_mask = np.isnan(X_imputed)
+        X = check_array(X, dtype=np.float32, force_all_finite="allow-nan")
+        check_is_fitted(self)
+        is_value_missing = np.isnan(X)
 
-        X_filled = np.where(missing_mask, self.means_, X_imputed)
+        for sample_index in np.where(is_value_missing.any(axis=1))[0]:
+            sample_data = X[sample_index]
+            missing_value_mask = is_value_missing[sample_index]
+            missing_columns = np.where(missing_value_mask)[0]
+            sample_data[missing_value_mask] = self.global_fallbacks_[missing_value_mask]
 
-        for sample_idx in np.where(missing_mask.any(axis=1))[0]:
-            sample_row_filled = X_filled[sample_idx]
-            sample_missing_cols = np.where(missing_mask[sample_idx])[0]
+            distances, neighbor_indices = self.index_.search(sample_data.reshape(1, -1), self.n_neighbors)
+            neighbors_data = X[neighbor_indices[0]]
+            neighbor_values = neighbors_data[:, missing_columns]
 
-            distances, neighbor_indices = self.index_.search(sample_row_filled.reshape(1, -1), self.n_neighbors)
-            neighbors = X_filled[neighbor_indices[0]]
+            if self.strategy == "mean":
+                imputed_values = np.nanmean(neighbor_values, axis=0)
+            elif self.strategy == "median":
+                imputed_values = np.nanmedian(neighbor_values, axis=0)
+            elif self.strategy == "weighted":
+                weights = 1 / (distances[0] + 1e-10)
+                adjusted_weights = weights[:, np.newaxis]
+                weighted_totals = np.nansum(neighbor_values * adjusted_weights, axis=0)
+                total_weights = np.nansum(adjusted_weights, axis=0)
+                imputed_values = weighted_totals / total_weights
 
-            for col in sample_missing_cols:
-                valid_neighbors = neighbors[:, col][~np.isnan(neighbors[:, col])]
-                valid_distances = distances[0, : len(valid_neighbors)]
+                no_weight_conditions = total_weights == 0
+                if no_weight_conditions.any():
+                    fallback_values = self.global_fallbacks_[missing_columns][no_weight_conditions]
+                    imputed_values[no_weight_conditions] = fallback_values
 
-                if len(valid_neighbors) < self.n_neighbors:
-                    if len(valid_neighbors) == 0:
-                        imputed_value = self.means_[col]
-                    else:
-                        if self.strategy in {"mean", "weighted"}:
-                            weights = (
-                                1 / (1 + valid_distances)
-                                if self.strategy == "weighted"
-                                else np.ones_like(valid_distances)
-                            )
-                            imputed_value = np.average(valid_neighbors, weights=weights)
-                        elif self.strategy == "median":
-                            imputed_value = np.median(valid_neighbors)
-                else:
-                    if self.strategy == "mean":
-                        imputed_value = np.mean(valid_neighbors)
-                    elif self.strategy == "median":
-                        imputed_value = np.median(valid_neighbors)
-                    elif self.strategy == "weighted":
-                        small_constant = 1e-10  # Small constant to prevent division by zero
-                        weights = 1 / (valid_distances + small_constant)
-                        imputed_value = np.average(valid_neighbors, weights=weights)
+            sample_data[missing_columns] = imputed_values
+            X[sample_index] = sample_data
 
-                X_imputed[sample_idx, col] = imputed_value
-
-        return X_imputed.astype(self.input_dtype_)  # Cast back to the original input dtype
+        return X

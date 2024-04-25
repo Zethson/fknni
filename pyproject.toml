@@ -4,10 +4,10 @@ requires = ["hatchling"]
 
 [project]
 name = "fknni"
-version = "1.0.0"
+version = "1.1.0"
 description = "Fast implementations of KNN imputation."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = {file = "LICENSE"}
 authors = [
     {name = "Lukas Heumos"},
