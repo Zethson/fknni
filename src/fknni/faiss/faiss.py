@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Union
 
 import faiss
 import numpy as np
@@ -12,7 +12,9 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
+        missing_values: Union[int, float, str, None] = np.nan,
         n_neighbors: int = 5,
+        *,
         metric: Literal["l2", "ip"] = "l2",
         strategy: Literal["mean", "median", "weighted"] = "mean",
         index_factory: str = "Flat",
@@ -20,6 +22,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         """Initializes FaissImputer with specified parameters that are used for the imputation.
 
         Args:
+            missing_values: The missing value to impute. Defaults to np.nan.
             n_neighbors: Number of neighbors to use for imputation. Defaults to 5.
             metric: Distance metric to use for neighbor search. Defaults to 'l2'.
             strategy: Method to compute imputed values among neighbors.
@@ -28,6 +31,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             index_factory: Description of the Faiss index type to build. Defaults to 'Flat'.
         """
         super().__init__()
+        self.missing_values = missing_values
         self.n_neighbors = n_neighbors
         self.metric = metric
         self.strategy = strategy
@@ -44,6 +48,11 @@ class FaissImputer(BaseEstimator, TransformerMixin):
           ValueError: If any parameters are set to an invalid value.
         """
         X = np.asarray(X, dtype=np.float32)
+        if isinstance(X, pd.DataFrame):
+            X = X.replace(self.missing_values, np.nan).values
+        else:
+            X = np.where(X == self.missing_values, np.nan, X)
+
         if np.isnan(X).all(axis=0).any():
             raise ValueError("Features with all values missing cannot be handled.")
 
