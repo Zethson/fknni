@@ -1,4 +1,6 @@
-from typing import Literal, Union
+from __future__ import annotations
+
+from typing import Literal
 
 import faiss
 import numpy as np
@@ -12,7 +14,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        missing_values: Union[int, float, str, None] = np.nan,
+        missing_values: int | float | str | None = np.nan,
         n_neighbors: int = 5,
         *,
         metric: Literal["l2", "ip"] = "l2",
@@ -37,7 +39,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         self.strategy = strategy
         self.index_factory = index_factory
 
-    def fit(self, X: np.ndarray | pd.DataFrame, *, y: np.ndarray | None = None) -> "FaissImputer":
+    def fit(self, X: np.ndarray | pd.DataFrame, *, y: np.ndarray | None = None) -> FaissImputer:
         """Fits the FaissImputer to the provided data.
 
         Args:
