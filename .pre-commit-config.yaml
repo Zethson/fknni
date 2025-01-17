@@ -12,7 +12,7 @@ repos:
       - id: prettier
         exclude: "^node_modules/"
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.1
+    rev: v0.9.1
     hooks:
       - id: ruff
         types_or: [python, pyi, jupyter]
@@ -42,3 +42,10 @@ repos:
           Fix the merge conflicts manually and remove the .rej files.
         language: fail
         files: '.*\.rej$'
+    - repo: https://github.com/pre-commit/mirrors-mypy
+      rev: v1.14.1
+      hooks:
+          - id: mypy
+            args: [--no-strict-optional, --ignore-missing-imports]
+            additional_dependencies:
+                ["types-setuptools", "types-requests", "types-attrs"]

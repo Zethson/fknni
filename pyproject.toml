@@ -4,7 +4,7 @@ requires = ["hatchling"]
 
 [project]
 name = "fknni"
-version = "1.1.1"
+version = "1.2.0"
 description = "Fast implementations of KNN imputation."
 readme = "README.md"
 requires-python = ">=3.9"

@@ -32,6 +32,12 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                       where closer neighbors have a higher influence on the imputation.
             index_factory: Description of the Faiss index type to build. Defaults to 'Flat'.
         """
+        if n_neighbors < 1:
+            raise ValueError("n_neighbors must be at least 1.")
+
+        if strategy not in set(["mean", "median", "weighted"]):
+            raise ValueError("Unknown strategy. Choose one of 'mean', 'median', 'weighted'")
+
         super().__init__()
         self.missing_values = missing_values
         self.n_neighbors = n_neighbors
@@ -82,7 +88,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         Returns:
             Data with imputed values as a NumPy array of the original data type.
         """
-        X = check_array(X, dtype=np.float32, force_all_finite="allow-nan")
+        X = check_array(X, dtype=np.float32, ensure_all_finite="allow-nan")
         check_is_fitted(self)
         is_value_missing = np.isnan(X)
 
