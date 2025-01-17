@@ -35,7 +35,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         if n_neighbors < 1:
             raise ValueError("n_neighbors must be at least 1.")
 
-        if strategy not in set(["mean", "median", "weighted"]):
+        if strategy not in {"mean", "median", "weighted"}:
             raise ValueError("Unknown strategy. Choose one of 'mean', 'median', 'weighted'")
 
         super().__init__()

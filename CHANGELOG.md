@@ -10,15 +10,15 @@ and this project adheres to [Semantic Versioning][].
 
 ## [1.1.1]
 
--   Python 3.9 compatibility
+- Python 3.9 compatibility
 
 ## [1.1.0]
 
--   Fixed mean imputation
+- Fixed mean imputation
 
 ## [1.0.0]
 
 ### Added
 
--   First implementation of FaissImputer
--   mean, median, weighted for strategies
+- First implementation of FaissImputer
+- mean, median, weighted for strategies

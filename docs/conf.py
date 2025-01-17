@@ -9,8 +9,6 @@ sys.path.insert(0, str(HERE / "extensions"))
 
 # -- Project information -----------------------------------------------------
 
-# NOTE: If you installed your project in editable mode, this might be stale.
-#       If this is the case, reinstall it to refresh the metadata
 info = metadata("fknni")
 project_name = info["Name"]
 author = info["Author"]
@@ -117,7 +115,7 @@ html_theme_options = {
 
 pygments_style = "default"
 
-nitpick_ignore = [
+nitpick_ignore: list[tuple[str, str]] = [
     # If building the documentation fails because of a missing link that is outside your control,
     # you can add an exception to this list.
     #     ("py:class", "igraph.Graph"),
