@@ -129,4 +129,17 @@ def test_invalid_n_neighbors():
 
 
 def test_no_full_rows():
-    pass
+    """Tests whether a dataset with no full rows can be imputed."""
+    arr = np.array(
+        [
+            [np.nan, np.nan, 27.81265195, 89.7247631, np.nan],
+            [np.nan, np.nan, 63.35486059, np.nan, np.nan],
+            [np.nan, np.nan, np.nan, np.nan, 64.19054628],
+            [np.nan, np.nan, 10.16766562, np.nan, np.nan],
+            [91.24215742, np.nan, np.nan, np.nan, np.nan],
+            [np.nan, 97.29442362, np.nan, np.nan, np.nan],
+        ]
+    )
+    imputer = FaissImputer(n_neighbors=1)
+    arr_imputed = imputer.fit_transform(arr)
+    assert not np.isnan(arr_imputed).any()

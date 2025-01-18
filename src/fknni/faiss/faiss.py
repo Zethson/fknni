@@ -34,7 +34,6 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         """
         if n_neighbors < 1:
             raise ValueError("n_neighbors must be at least 1.")
-
         if strategy not in {"mean", "median", "weighted"}:
             raise ValueError("Unknown strategy. Choose one of 'mean', 'median', 'weighted'")
 
@@ -51,9 +50,6 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         Args:
             X: Input data with potential missing values.
             y: Ignored, present for compatibility with sklearn's TransformerMixin.
-
-        Raises:
-          ValueError: If any parameters are set to an invalid value.
         """
         X = np.asarray(X, dtype=np.float32)
         if isinstance(X, pd.DataFrame):
@@ -64,18 +60,23 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         if np.isnan(X).all(axis=0).any():
             raise ValueError("Features with all values missing cannot be handled.")
 
-        mask = ~np.isnan(X).any(axis=1)
-        X_non_missing = X[mask]
-
-        index = faiss.index_factory(X_non_missing.shape[1], self.index_factory)
-        index.metric_type = faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNER_PRODUCT
-        index.train(X_non_missing)
-        index.add(X_non_missing)
-
-        self.index_ = index
         self.global_fallbacks_ = (
             np.nanmean(X, axis=0) if self.strategy in ["mean", "weighted"] else np.nanmedian(X, axis=0)
         )
+
+        non_missing_mask = ~np.isnan(X).any(axis=1)
+        if non_missing_mask.sum() > max(2, X.shape[1] // 2):  # Normal case
+            X_complete = X[non_missing_mask]
+            index = faiss.index_factory(X.shape[1], self.index_factory)
+            index.metric_type = faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNER_PRODUCT
+            index.train(X_complete)
+            index.add(X_complete)
+            self.index_ = index
+            self.X_train_ = X_complete
+            self.is_extremely_sparse_ = False
+        else:  # Extremely sparse case
+            self.is_extremely_sparse_ = True
+            self.X_train_ = X
 
         return self
 
@@ -83,13 +84,26 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         """Imputes missing values in the data using the fitted Faiss index.
 
         Args:
-            X: Data with missing values to impute. Expected to be either a NumPy array or a pandas DataFrame.
+            X: Data with missing values to impute.
 
         Returns:
             Data with imputed values as a NumPy array of the original data type.
         """
         X = check_array(X, dtype=np.float32, ensure_all_finite="allow-nan")
         check_is_fitted(self)
+
+        if self.is_extremely_sparse_:
+            return self._transform_sparse(X)
+        return self._transform_normal(X)
+
+    def _transform_sparse(self, X):
+        X_imputed = X.copy()
+        is_missing = np.isnan(X_imputed)
+        X_imputed[is_missing] = np.take(self.global_fallbacks_, np.where(is_missing)[1])
+        return X_imputed
+
+    def _transform_normal(self, X):
+        X_imputed = X.copy()
         is_value_missing = np.isnan(X)
 
         for sample_index in np.where(is_value_missing.any(axis=1))[0]:
@@ -99,7 +113,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             sample_data[missing_value_mask] = self.global_fallbacks_[missing_value_mask]
 
             distances, neighbor_indices = self.index_.search(sample_data.reshape(1, -1), self.n_neighbors)
-            neighbors_data = X[neighbor_indices[0]]
+            neighbors_data = self.X_train_[neighbor_indices[0]]
             neighbor_values = neighbors_data[:, missing_columns]
 
             if self.strategy == "mean":
@@ -118,7 +132,6 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                     fallback_values = self.global_fallbacks_[missing_columns][no_weight_conditions]
                     imputed_values[no_weight_conditions] = fallback_values
 
-            sample_data[missing_columns] = imputed_values
-            X[sample_index] = sample_data
+            X_imputed[sample_index, missing_columns] = imputed_values
 
-        return X
+        return X_imputed

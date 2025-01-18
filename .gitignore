@@ -28,3 +28,5 @@ __pycache__/
 /.vscode/
 
 node_modules
+test.ipynb
+*.h5ad
