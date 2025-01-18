@@ -37,12 +37,12 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         if strategy not in {"mean", "median", "weighted"}:
             raise ValueError("Unknown strategy. Choose one of 'mean', 'median', 'weighted'")
 
-        super().__init__()
         self.missing_values = missing_values
         self.n_neighbors = n_neighbors
         self.metric = metric
         self.strategy = strategy
         self.index_factory = index_factory
+        super().__init__()
 
     def fit(self, X: np.ndarray | pd.DataFrame, *, y: np.ndarray | None = None) -> FaissImputer:
         """Fits the FaissImputer to the provided data.
@@ -52,32 +52,22 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             y: Ignored, present for compatibility with sklearn's TransformerMixin.
         """
         X = np.asarray(X, dtype=np.float32)
-        if isinstance(X, pd.DataFrame):
-            X = X.replace(self.missing_values, np.nan).values
-        else:
-            X = np.where(X == self.missing_values, np.nan, X)
-
         if np.isnan(X).all(axis=0).any():
             raise ValueError("Features with all values missing cannot be handled.")
 
         self.global_fallbacks_ = (
             np.nanmean(X, axis=0) if self.strategy in ["mean", "weighted"] else np.nanmedian(X, axis=0)
         )
+        non_missing = ~np.isnan(X).any(axis=1)
 
-        non_missing_mask = ~np.isnan(X).any(axis=1)
-        if non_missing_mask.sum() > max(2, X.shape[1] // 2):  # Normal case
-            X_complete = X[non_missing_mask]
+        if non_missing.any():
+            X_complete = X[non_missing]
             index = faiss.index_factory(X.shape[1], self.index_factory)
             index.metric_type = faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNER_PRODUCT
             index.train(X_complete)
             index.add(X_complete)
             self.index_ = index
             self.X_train_ = X_complete
-            self.is_extremely_sparse_ = False
-        else:  # Extremely sparse case
-            self.is_extremely_sparse_ = True
-            self.X_train_ = X
-
         return self
 
     def transform(self, X: np.ndarray | pd.DataFrame) -> np.ndarray:
@@ -91,48 +81,37 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         """
         X = check_array(X, ensure_all_finite="allow-nan")
         check_is_fitted(self)
-
-        if self.is_extremely_sparse_:
-            return self._transform_sparse(X)
-        return self._transform_normal(X)
-
-    def _transform_sparse(self, X) -> np.ndarray:
         X_imputed = X.copy()
         is_missing = np.isnan(X_imputed)
-        X_imputed[is_missing] = np.take(self.global_fallbacks_, np.where(is_missing)[1])
 
-        return X_imputed
+        for idx in np.where(is_missing.any(axis=1))[0]:
+            missing = is_missing[idx]
+            sample = X_imputed[idx].copy()
+            sample[missing] = self.global_fallbacks_[missing]
 
-    def _transform_normal(self, X) -> np.ndarray:
-        X_imputed = X.copy()
-        is_value_missing = np.isnan(X)
+            # We were able to build a FAISS index so we perform actual KNN imputation
+            if hasattr(self, "index_"):
+                distances, indices = self.index_.search(sample.reshape(1, -1), self.n_neighbors)
+                neighbors = self.X_train_[indices[0]]
+                valid_neighbors = ~np.isnan(neighbors[:, missing]).all(axis=0)
 
-        for sample_index in np.where(is_value_missing.any(axis=1))[0]:
-            sample_data = X[sample_index]
-            missing_value_mask = is_value_missing[sample_index]
-            missing_columns = np.where(missing_value_mask)[0]
-            sample_data[missing_value_mask] = self.global_fallbacks_[missing_value_mask]
+                if valid_neighbors.any():
+                    missing_cols = np.where(missing)[0][valid_neighbors]
+                    if self.strategy == "weighted":
+                        weights = 1 / (distances[0] + 1e-10)[:, np.newaxis]
+                        neighbor_vals = neighbors[:, missing_cols]
+                        weighted_sum = np.nansum(neighbor_vals * weights, axis=0)
+                        weight_sum = np.nansum(weights, axis=0)
+                        X_imputed[idx, missing_cols] = weighted_sum / weight_sum
+                    else:
+                        func = np.nanmean if self.strategy == "mean" else np.nanmedian
+                        X_imputed[idx, missing_cols] = func(neighbors[:, missing_cols], axis=0)
 
-            distances, neighbor_indices = self.index_.search(sample_data.reshape(1, -1), self.n_neighbors)
-            neighbors_data = self.X_train_[neighbor_indices[0]]
-            neighbor_values = neighbors_data[:, missing_columns]
-
-            if self.strategy == "mean":
-                imputed_values = np.nanmean(neighbor_values, axis=0)
-            elif self.strategy == "median":
-                imputed_values = np.nanmedian(neighbor_values, axis=0)
-            elif self.strategy == "weighted":
-                weights = 1 / (distances[0] + 1e-10)
-                adjusted_weights = weights[:, np.newaxis]
-                weighted_totals = np.nansum(neighbor_values * adjusted_weights, axis=0)
-                total_weights = np.nansum(adjusted_weights, axis=0)
-                imputed_values = weighted_totals / total_weights
-
-                no_weight_conditions = total_weights == 0
-                if no_weight_conditions.any():
-                    fallback_values = self.global_fallbacks_[missing_columns][no_weight_conditions]
-                    imputed_values[no_weight_conditions] = fallback_values
-
-            X_imputed[sample_index, missing_columns] = imputed_values
+                fallback_cols = np.where(missing)[0][~valid_neighbors]
+                if len(fallback_cols):
+                    X_imputed[idx, fallback_cols] = self.global_fallbacks_[fallback_cols]
+            # We were not able to build a FAISS index and therefore perform a fallback strategy
+            else:
+                X_imputed[idx, missing] = self.global_fallbacks_[missing]
 
         return X_imputed
