@@ -4,7 +4,6 @@ on:
   release:
     types: [published]
 
-# Use "trusted publishing", see https://docs.pypi.org/trusted-publishers/
 jobs:
   release:
     name: Upload release to PyPI
@@ -19,6 +18,7 @@ jobs:
         with:
           filter: blob:none
           fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
