@@ -89,20 +89,21 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         Returns:
             Data with imputed values as a NumPy array of the original data type.
         """
-        X = check_array(X, dtype=np.float32, ensure_all_finite="allow-nan")
+        X = check_array(X, ensure_all_finite="allow-nan")
         check_is_fitted(self)
 
         if self.is_extremely_sparse_:
             return self._transform_sparse(X)
         return self._transform_normal(X)
 
-    def _transform_sparse(self, X):
+    def _transform_sparse(self, X) -> np.ndarray:
         X_imputed = X.copy()
         is_missing = np.isnan(X_imputed)
         X_imputed[is_missing] = np.take(self.global_fallbacks_, np.where(is_missing)[1])
+
         return X_imputed
 
-    def _transform_normal(self, X):
+    def _transform_normal(self, X) -> np.ndarray:
         X_imputed = X.copy()
         is_value_missing = np.isnan(X)
 
