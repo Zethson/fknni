@@ -100,11 +100,11 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                 # Call FAISS and retrieve data
                 distances, indices = index.search(sample.reshape(1, -1), self.n_neighbors)
                 valid_indices = indices[0][indices[0] >= 0] # Filter out negative indices because they are FAISS error codes
-                assert len(valid_indices) == self.n_neighbors # TODO: Assert or warning (if at least 1 valid neighbor?)
-                                                              #  or exception (if none?)? We can expect to have enough
-                                                              #  neighbors except if our training dataset is too small
-                                                              #  which can only happen if the original X was very small.
-                                                              #  But we have to handle that case.
+                assert len(valid_indices) >=1  # TODO: Assert or warning (if at least 1 valid neighbor?)
+                                               #  or exception (if none?)? We can expect to have enough
+                                               #  neighbors except if our training dataset is too small
+                                               #  which can only happen if the original X was very small.
+                                               #  But we have to handle that case.
                 neighbors = training_data[valid_indices]
 
                 # Apply strategy on neighbors
