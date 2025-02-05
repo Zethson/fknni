@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal, Any, Iterable, Tuple, Callable
+from typing import Literal, Any
 
 import faiss
 import numpy as np
-from numpy import ndarray, dtype, floating
+from numpy import ndarray, dtype
 from overrides import overrides
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -67,39 +67,44 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         # Prepare fallback values, used to prefill the query vectors nan´s
         # or as an imputation fallback if we can't build an index
         global_fallbacks_ = (
-            np.nanmean(X, axis=0) if self.strategy in ["mean", "weighted"] else np.nanmedian(X, axis=0)
+            np.nanmean(self.X_full, axis=0) if self.strategy in ["mean", "weighted"] else np.nanmedian(self.X_full, axis=0)
         )
 
         # We will need to impute all features having nan´s
-        feature_indices_to_impute = [i for i in range(X.shape[1]) if np.isnan(X[:, i]).any()]
+        feature_indices_to_impute = [i for i in range(self.X_full.shape[1]) if np.isnan(self.X_full[:, i]).any()]
 
         # Now impute iteratively
         while feature_indices_to_impute:
             feature_indices_being_imputed, training_indices, training_data, index = self._fit_train_imputer(feature_indices_to_impute)
 
-            # Can we proceed with a FAISS imputation?
-            assert index is not None # Todo: Fallback here
+            # Use fallback data if we can't build an index and iterate again
+            # TODO: Should we warn the user when this happens?
+            if index is None:
+                self.X_full[::, feature_indices_being_imputed] =  global_fallbacks_[feature_indices_being_imputed]
+                continue
 
             # Extract the features from X that was used to train FAISS, and compute the sparseness matrix
-            X_imputed = self.X_full[::, training_indices]
-            X_imputed_missing_mask = np.isnan(X_imputed)
+            x_imputed = self.X_full[::, training_indices]
+            x_imputed_missing_mask = np.isnan(x_imputed)
 
             # Iterate through the data to impute, ignoring already imputed rows
-            for idx in np.where(X_imputed_missing_mask.any(axis=1))[0]:
+            sample_missing_mask = []
+            for idx in np.where(x_imputed_missing_mask.any(axis=1))[0]:
                 # Extract the sample
-                sample_missing_mask = X_imputed_missing_mask[idx]
-                sample = X_imputed[idx]
+                sample_missing_mask = x_imputed_missing_mask[idx]
+                sample = x_imputed[idx]
 
                 # We need to prefill the query vector as FAISS doesn't accept nan´s
-                try:
-                    sample[sample_missing_mask] = global_fallbacks_[feature_indices_being_imputed][sample_missing_mask]
-                except:
-                    print("ERROR")
+                sample[sample_missing_mask] = global_fallbacks_[training_indices][sample_missing_mask]
 
                 # Call FAISS and retrieve data
                 distances, indices = index.search(sample.reshape(1, -1), self.n_neighbors)
-                valid_indices = indices[0][indices[0] >= 0] # Filter out negative indices because it's a FAISS error code
-                assert len(valid_indices) == self.n_neighbors # Todo: Assert or warning or exception?
+                valid_indices = indices[0][indices[0] >= 0] # Filter out negative indices because they are FAISS error codes
+                assert len(valid_indices) == self.n_neighbors # TODO: Assert or warning (if at least 1 valid neighbor?)
+                                                              #  or exception (if none?)? We can expect to have enough
+                                                              #  neighbors except if our training dataset is too small
+                                                              #  which can only happen if the original X was very small.
+                                                              #  But we have to handle that case.
                 neighbors = training_data[valid_indices]
 
                 # Apply strategy on neighbors
@@ -109,13 +114,17 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                     neighbor_vals = neighbors[:, missing_cols]
                     weighted_sum = np.nansum(neighbor_vals * weights, axis=0)
                     weight_sum = np.nansum(weights, axis=0)
-                    X_imputed[idx, missing_cols] = weighted_sum / weight_sum
+                    x_imputed[idx, missing_cols] = weighted_sum / weight_sum
                 else:
                     func = np.nanmean if self.strategy == "mean" else np.nanmedian
-                    X_imputed[idx, missing_cols] = func(neighbors[:, missing_cols], axis=0)
+                    x_imputed[idx, missing_cols] = func(neighbors[:, missing_cols], axis=0)
 
-            # Transfer to X and remove the imputed features from the to-do list
-            self.X_full[::, feature_indices_being_imputed] = X_imputed
+            # Transfer back to X
+            # Features added by _fit_train_imputer only for training purpose are placed on the right
+            # so we can just select the features on the left
+            self.X_full[::, feature_indices_being_imputed] = x_imputed[::, np.arange(len(feature_indices_being_imputed))]
+
+            # Remove the imputed features from the to-do list
             feature_indices_to_impute = [x for x in feature_indices_to_impute if x not in feature_indices_being_imputed]
 
         assert not np.isnan(self.X_full).any()  # TODO: What to do here? It shouldn't happen.
@@ -132,24 +141,27 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                                             if not np.isnan(self.X_full[:, i]).any()]
 
         while True:
-            # Do we have only one feature left? Then it's no point trying to build an index
-            if len(features_indices_to_impute) <= 1:
-                return features_indices_to_impute, None, None
-
             # Train data features are those indexed by features_indices AND those already fully imputed in
-            # the full X
+            # the full X. Those indices are placed after the features to impute (ie on the right).
             train_indices = features_indices_to_impute + already_imputed_features_indices
 
             # Filter X with the features indices provided in column and not containing nan´s for rows
-            X_subset = self.X_full[::, train_indices]
-            X_non_missing = X_subset[~np.isnan(X_subset).any(axis=1)]
+            x_subset = self.X_full[::, train_indices]
+            x_non_missing = x_subset[~np.isnan(x_subset).any(axis=1)]
 
             # Check if we have enough data
-            if X_non_missing.shape[0] >= self.X_full.shape[0] * self.min_data_ratio:
-                # Yes, we have our list of features to impute
-                return features_indices_to_impute, train_indices, X_non_missing, self._train(X_non_missing)
+            if x_non_missing.shape[0] >= self.X_full.shape[0] * self.min_data_ratio:
+                # We have our list of features to impute!
+                return features_indices_to_impute, train_indices, x_non_missing, self._train(x_non_missing)
             else:
-                # No, remove the feature containing the largest amount of nan´s and iterate again
+                # There is no point trying to build an index...
+                # TODO: Here instead of just returning nothing, we could also try to lower min_data_ratio temporarily,
+                #  iterate again, and see if we can build an index. If min_data_ratio reaches a minimum and still no
+                #  index built, then return nothing.
+                if len(features_indices_to_impute) <= 1:
+                    return features_indices, None, None, None
+
+                # Remove the feature containing the largest amount of nan´s and iterate again
                 for value in self._features_indices_sorted_descending_on_nan():
                     if value in features_indices_to_impute:
                         features_indices_to_impute.remove(value)
@@ -165,11 +177,10 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
         return self.features_nan
 
-    def _train(self, X_train: np.ndarray) -> faiss.Index:
-        index = faiss.index_factory(X_train.shape[1], self.index_factory)
+    def _train(self, x_train: np.ndarray) -> faiss.Index:
+        index = faiss.index_factory(x_train.shape[1], self.index_factory)
         index.metric_type = faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNER_PRODUCT
-        index.train(X_train)
-        index.add(X_train)
+        index.train(x_train)
+        index.add(x_train)
         return index
-
 
