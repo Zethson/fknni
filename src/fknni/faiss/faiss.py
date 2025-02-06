@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Any, override
+from typing import Literal, Any
 from lamin_utils import logger
 
 import faiss
