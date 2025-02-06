@@ -21,7 +21,8 @@ urls.Home-page = "https://github.com/zethson/fknni"
 dependencies = [
     "scikit-learn",
     "faiss-cpu",
-    "pandas"
+    "pandas",
+    "lamin_utils",
 ]
 
 [project.optional-dependencies]
