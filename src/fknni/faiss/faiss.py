@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Literal, Any
+from typing import Literal, Any, override
+from lamin_utils import logger
 
 import faiss
 import numpy as np
 from numpy import ndarray, dtype
-from typing import override
 from sklearn.base import BaseEstimator, TransformerMixin
 
 class FaissImputer(BaseEstimator, TransformerMixin):
@@ -81,7 +81,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
             # Use fallback data if we can't build an index and iterate again
             if index is None:
-                _warn_fallback()
+                self._warn_fallback()
                 self.X_full[::, feature_indices_being_imputed] =  global_fallbacks_[feature_indices_being_imputed]
                 continue
 
@@ -107,7 +107,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
                 # FAISS couldn't find any neighbor, use fallback values, and go to next row
                 if len(valid_indices) == 0:
-                    _warn_fallback()
+                    self._warn_fallback()
                     x_imputed[idx, missing_cols] = sample[missing_cols]
                     continue
 
