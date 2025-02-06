@@ -49,7 +49,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         self.warned_unsufficient_neighbors = False
         super().__init__()
 
-    @override
+    # @override
     def fit_transform(self, X: np.ndarray, y=None, **fit_params) -> ndarray[Any, dtype[Any]] | None:
         """Imputes missing values in the data using the fitted Faiss index.
 
