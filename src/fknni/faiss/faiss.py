@@ -60,7 +60,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         Returns:
             Data with imputed values as a NumPy array of the original data type.
         """
-        self.X_full = X
+        self.X_full = X.copy() # TODO: the method signature suggests we want this. The tests also expect this behavior. But do we really want it? The copy could be expensive...
         if not np.issubdtype(X.dtype, np.floating):
             self.X_full = np.asarray(X, dtype=np.float32)
         if np.isnan(self.X_full).all(axis=0).any():
