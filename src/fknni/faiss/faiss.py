@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import concurrent.futures
+import multiprocessing
+import os
+import sys
 from typing import Literal, Any
 from lamin_utils import logger
 
@@ -45,8 +49,10 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         self.X_full = None
         self.features_nan = None
         self.min_data_ratio = 0.25
-        self.warned_fallback = False
-        self.warned_unsufficient_neighbors = False
+        self.warned_fallback = multiprocessing.Value('b', False)
+        self.warned_fallback_lock = multiprocessing.Lock()
+        self.warned_insufficient_neighbors = multiprocessing.Value('b', False)
+        self.warned_insufficient_neighbors_lock = multiprocessing.Lock()
         super().__init__()
 
     # @override
@@ -82,16 +88,14 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             # Use fallback data if we can't build an index and iterate again
             if index is None:
                 self._warn_fallback()
-                self.X_full[::, feature_indices_being_imputed] =  global_fallbacks_[feature_indices_being_imputed]
+                self.X_full[::, feature_indices_being_imputed] = global_fallbacks_[feature_indices_being_imputed]
                 continue
 
             # Extract the features from X that was used to train FAISS, and compute the sparseness matrix
             x_imputed = self.X_full[::, training_indices]
             x_imputed_missing_mask = np.isnan(x_imputed)
 
-            # Iterate through the data to impute, ignoring already imputed rows
-            sample_missing_mask = []
-            for idx in np.where(x_imputed_missing_mask.any(axis=1))[0]:
+            def _impute(idx):
                 # Extract the sample
                 sample_missing_mask = x_imputed_missing_mask[idx]
                 sample = x_imputed[idx]
@@ -103,19 +107,20 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                 # Call FAISS and retrieve data
                 distances, indices = index.search(sample.reshape(1, -1), self.n_neighbors)
                 assert len(indices[0]) == self.n_neighbors
-                valid_indices = indices[0][indices[0] >= 0] # Filter out negative indices because they are FAISS error codes
+                valid_indices = indices[0][indices[0] >= 0]  # Filter out negative indices because they are FAISS error codes
 
                 # FAISS couldn't find any neighbor, use fallback values, and go to next row
                 if len(valid_indices) == 0:
                     self._warn_fallback()
                     x_imputed[idx, missing_cols] = sample[missing_cols]
-                    continue
+                    return
 
                 # FAISS couldn't find the amount of requested neighbors, warn user and proceed
                 if len(valid_indices) < self.n_neighbors:
-                    if not self.warned_unsufficient_neighbors:
-                        logger.warning(f"FAISS couldn't find all the requested neighbors at least once")
-                        self.warned_unsufficient_neighbors = True
+                    with self.warned_insufficient_neighbors_lock:
+                        if not self.warned_insufficient_neighbors.value:
+                            logger.warning(f"FAISS couldn't find all the requested neighbors at least once")
+                            self.warned_insufficient_neighbors.value = True
 
                 # Apply strategy on neighbors data
                 neighbors = training_data[valid_indices]
@@ -128,6 +133,11 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                 else:
                     func = np.nanmean if self.strategy == "mean" else np.nanmedian
                     x_imputed[idx, missing_cols] = func(neighbors[:, missing_cols], axis=0)
+
+            # Iterate through the data to impute, ignoring already imputed rows
+            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+                 for missing_rows in np.where(x_imputed_missing_mask.any(axis=1))[0]:
+                    pool.submit(_impute, missing_rows)
 
             # Transfer back to X
             # Features added by _fit_train_imputer for training purpose only are placed on the right
@@ -196,7 +206,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         return index
 
     def _warn_fallback(self):
-        if not self.warned_fallback:
-            logger.warning(f"Imputation led to the use at least once of fallback data")
-            self.warned_fallback = True
-
+        with self.warned_fallback_lock:
+            if not self.warned_fallback.value:
+                logger.warning(f"Imputation led to the use at least once of fallback data")
+                self.warned_fallback.value = True
