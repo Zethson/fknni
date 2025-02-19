@@ -24,13 +24,13 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         """Initializes FaissImputer with specified parameters that are used for the imputation.
 
         Args:
-            missing_values: The missing value to impute. Defaults to np.nan.
-            n_neighbors: Number of neighbors to use for imputation. Defaults to 5.
-            metric: Distance metric to use for neighbor search. Defaults to 'l2'.
+            missing_values: The missing value to impute.
+            n_neighbors: Number of neighbors to use for imputation.
+            metric: Distance metric to use for neighbor search.
             strategy: Method to compute imputed values among neighbors.
                       The weighted strategy is similar to scikt-learn's implementation,
                       where closer neighbors have a higher influence on the imputation.
-            index_factory: Description of the Faiss index type to build. Defaults to 'Flat'.
+            index_factory: Description of the Faiss index type to build.
             min_data_ratio: The minimum (dimension 0) size of the FAISS index relative to the (dimension 0) size of the
                             dataset that will be used to train FAISS. Defaults to 0.25. See also `fit_transform`.
         """
@@ -170,9 +170,6 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                 return features_indices_to_impute, train_indices, x_non_missing, self._train(x_non_missing)
             else:
                 # One feature left, meaning we can't build an index
-                # TODO: Here instead of just returning nothing, we could also try to lower min_data_ratio temporarily,
-                #  iterate again, and see if we can build an index. If min_data_ratio reaches a minimum and still no
-                #  index built, then return nothing.
                 if len(features_indices_to_impute) <= 1:
                     return features_indices, None, None, None
 

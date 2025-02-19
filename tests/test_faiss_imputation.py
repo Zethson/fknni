@@ -134,19 +134,6 @@ def test_regression_imputation(regression_dataset):
     assert abs(score_orig - score_imputed) < 0.1
 
 
-def test_transform_new_data(simple_test_df):
-    """Tests if transform works correctly on new data"""
-    # TODO: Here we have a problem. We can't train with a dataset and impute another one. Test disabled for now
-    pass
-    # data, data_missing = simple_test_df
-    # imputer = FaissImputer(n_neighbors=5)
-    # imputer.fit(data)
-    #
-    # new_data = data_missing.copy()
-    # imputed_new = imputer.transform(new_data)
-    # assert not np.isnan(imputed_new).any()
-
-
 def test_invalid_strategy():
     """Tests if imputer raises error for invalid strategy"""
     with pytest.raises(ValueError):
