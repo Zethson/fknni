@@ -19,6 +19,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         metric: Literal["l2", "ip"] = "l2",
         strategy: Literal["mean", "median", "weighted"] = "mean",
         index_factory: str = "Flat",
+        min_data_ratio: float = 0.25,
     ):
         """Initializes FaissImputer with specified parameters that are used for the imputation.
 
@@ -30,6 +31,8 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                       The weighted strategy is similar to scikt-learn's implementation,
                       where closer neighbors have a higher influence on the imputation.
             index_factory: Description of the Faiss index type to build. Defaults to 'Flat'.
+            min_data_ratio: The minimum (dimension 0) size of the FAISS index relative to the (dimension 0) size of the
+                            dataset that will be used to train FAISS. Defaults to 0.25. See also `fit_transform`.
         """
         if n_neighbors < 1:
             raise ValueError("n_neighbors must be at least 1.")
@@ -41,17 +44,19 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         self.metric = metric
         self.strategy = strategy
         self.index_factory = index_factory
-        self.min_data_ratio = 0
         self.X_full = None
         self.features_nan = None
-        self.min_data_ratio = 0.25
+        self.min_data_ratio = min_data_ratio
         self.warned_fallback = False
         self.warned_unsufficient_neighbors = False
         super().__init__()
 
     # @override
     def fit_transform(self, X: np.ndarray, y=None, **fit_params) -> ndarray[Any, dtype[Any]] | None:
-        """Imputes missing values in the data using the fitted Faiss index.
+        """Imputes missing values in the data using the fitted Faiss index. This imputation will be performed in place.
+        This imputation will use self.min_data_ratio to check if the index is of sufficient (dimension 0) size to
+        perform a qualitative KNN lookup. If not, it will temporarily exclude enough features to reach this threshold
+        and try again. If an index still can't be built, it will use fallbacks values as defined by self.strategy.
 
         Args:
             X: Input data with potential missing values.
@@ -60,11 +65,9 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         Returns:
             Data with imputed values as a NumPy array of the original data type.
         """
-        self.X_full = X.copy() # TODO: the method signature suggests we want this. The tests also expect this behavior. But do we really want it? The copy could be expensive...
-        if not np.issubdtype(X.dtype, np.floating):
-            self.X_full = np.asarray(X, dtype=np.float32)
+        self.X_full = np.asarray(X, dtype=np.float64) if not np.issubdtype(X.dtype, np.floating) else X
         if np.isnan(self.X_full).all(axis=0).any():
-            raise ValueError("Features with all values missing cannot be handled.")
+            raise ValueError("Features with only missing values cannot be handled.")
 
         # Prepare fallback values, used to prefill the query vectors nan´s
         # or as an imputation fallback if we can't build an index
@@ -82,11 +85,11 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             # Use fallback data if we can't build an index and iterate again
             if index is None:
                 self._warn_fallback()
-                self.X_full[::, feature_indices_being_imputed] =  global_fallbacks_[feature_indices_being_imputed]
+                self.X_full[:, feature_indices_being_imputed] =  global_fallbacks_[feature_indices_being_imputed]
                 continue
 
             # Extract the features from X that was used to train FAISS, and compute the sparseness matrix
-            x_imputed = self.X_full[::, training_indices]
+            x_imputed = self.X_full[:, training_indices]
             x_imputed_missing_mask = np.isnan(x_imputed)
 
             # Iterate through the data to impute, ignoring already imputed rows
@@ -114,7 +117,8 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                 # FAISS couldn't find the amount of requested neighbors, warn user and proceed
                 if len(valid_indices) < self.n_neighbors:
                     if not self.warned_unsufficient_neighbors:
-                        logger.warning(f"FAISS couldn't find all the requested neighbors at least once")
+                        logger.warning(f"FAISS couldn't find all the requested neighbors. "
+                                       f"This warning will be displayed only once.")
                         self.warned_unsufficient_neighbors = True
 
                 # Apply strategy on neighbors data
@@ -132,12 +136,12 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             # Transfer back to X
             # Features added by _fit_train_imputer for training purpose only are placed on the right
             # so we can just select the features on the left
-            self.X_full[::, feature_indices_being_imputed] = x_imputed[::, np.arange(len(feature_indices_being_imputed))]
+            self.X_full[:, feature_indices_being_imputed] = x_imputed[:, np.arange(len(feature_indices_being_imputed))]
 
             # Remove the imputed features from the to-do list
-            feature_indices_to_impute = [x for x in feature_indices_to_impute if x not in feature_indices_being_imputed]
+            feature_indices_to_impute = [feature_indice for feature_indice in feature_indices_to_impute if feature_indice not in feature_indices_being_imputed]
 
-        assert not np.isnan(self.X_full).any()  # TODO: What to do here? It shouldn't happen.
+        assert not np.isnan(self.X_full).any()
         return self.X_full
 
     def _fit_train_imputer(self, features_indices: list[int]) -> (list[int],
@@ -157,7 +161,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             train_indices = features_indices_to_impute + already_imputed_features_indices
 
             # Filter X with the features indices provided in column and not containing nan´s for rows
-            x_subset = self.X_full[::, train_indices]
+            x_subset = self.X_full[:, train_indices]
             x_non_missing = x_subset[~np.isnan(x_subset).any(axis=1)]
 
             # Check if we have enough data
@@ -197,6 +201,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
 
     def _warn_fallback(self):
         if not self.warned_fallback:
-            logger.warning(f"Imputation led to the use at least once of fallback data")
+            logger.warning(f"Fallback data (as defined by passed strategy) were used. "
+                           f"This warning will only be displayed once.")
             self.warned_fallback = True
 

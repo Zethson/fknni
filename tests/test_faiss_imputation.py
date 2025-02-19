@@ -1,8 +1,8 @@
+from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
 from sklearn.datasets import make_regression
-
 from fknni.faiss.faiss import FaissImputer
 
 
@@ -27,30 +27,60 @@ def regression_dataset(rng):
         X_missing[i, j] = np.nan
     return X, X_missing, y
 
-# TODO: Should we also make the "base checks" we do in ehrapy? See ehrapy/tests/preprocessing/test_imputation/_base_check_imputation
+
+def _base_check_imputation(
+    data_original: np.ndarray,
+    data_imputed: np.ndarray,
+):
+    """Provides the following base checks:
+    - Imputation doesn't leave any NaN behind
+    - Imputation doesn't modify any data that wasn't NaN
+
+    Args:
+        data_before_imputation: Dataset before imputation
+        data_after_imputation: Dataset after imputation
+
+    Raises:
+        AssertionError: If any of the checks fail.
+    """
+    if data_original.shape != data_imputed.shape:
+        raise AssertionError("The shapes of the two datasets do not match")
+
+    # Ensure no NaN remains in the imputed dataset
+    if np.isnan(data_imputed).any():
+        raise AssertionError("NaN found in imputed columns of layer_after.")
+
+    # Ensure imputation does not alter non-NaN values in the imputed columns
+    imputed_non_nan_mask = ~np.isnan(data_original)
+    if not _are_ndarrays_equal(data_original[imputed_non_nan_mask], data_imputed[imputed_non_nan_mask]):
+        raise AssertionError("Non-NaN values in imputed columns were modified.")
+
+    # If reaching here: all checks passed
+    return
+
 
 def test_median_imputation(simple_test_df):
     """Tests if median imputation successfully fills all NaN values"""
     data, data_missing = simple_test_df
-    imputer = FaissImputer(n_neighbors=5, strategy="median")
-    df_imputed = imputer.fit_transform(data_missing)
-    assert not np.isnan(df_imputed).any()
+    data_original = data_missing.copy()
+    FaissImputer(n_neighbors=5, strategy="median").fit_transform(data_missing)
+    _base_check_imputation(data_original, data_missing)
 
 
 def test_mean_imputation(simple_test_df):
     """Tests if mean imputation successfully fills all NaN values"""
     data, data_missing = simple_test_df
-    imputer = FaissImputer(n_neighbors=5, strategy="mean")
-    df_imputed = imputer.fit_transform(data_missing)
-    assert not np.isnan(df_imputed).any()
+    data_original = data_missing.copy()
+    FaissImputer(n_neighbors=5, strategy="mean").fit_transform(data_missing)
+    _base_check_imputation(data_original, data_missing)
 
 
 def test_imputer_with_no_missing_values(simple_test_df):
     """Tests if imputer preserves data when no values are missing"""
     data, _ = simple_test_df
-    imputer = FaissImputer(n_neighbors=5, strategy="median")
-    df_imputed = imputer.fit_transform(data)
-    np.testing.assert_array_equal(data, df_imputed)
+    data_original = data.copy()
+    FaissImputer(n_neighbors=5, strategy="median").fit_transform(data)
+    _base_check_imputation(data_original, data)
 
 
 def test_imputer_with_all_nan_column(rng):
@@ -59,45 +89,48 @@ def test_imputer_with_all_nan_column(rng):
     data_missing = data.copy()
     data_missing[:, 2] = np.nan
     with pytest.raises(ValueError):
-        imputer = FaissImputer(n_neighbors=5)
-        imputer.fit_transform(data_missing)
+        FaissImputer(n_neighbors=5).fit_transform(data_missing)
 
 
 def test_imputer_with_all_nan_row(rng):
     """Tests if imputer handles all-NaN rows by imputing them"""
     data = rng.uniform(0, 100, size=(10, 5))
+    data[3, :] = np.nan
     data_missing = data.copy()
-    data_missing[3, :] = np.nan
+    data_original = data.copy()
 
-    imputer = FaissImputer(n_neighbors=5)
-    imputed = imputer.fit_transform(data_missing)
+    FaissImputer(n_neighbors=5).fit_transform(data_missing)
 
-    assert not np.isnan(imputed[3, :]).any()
-    assert not np.array_equal(imputed[3, :], data[3, :])
+    _base_check_imputation(data_original, data_missing)
 
 
 def test_imputer_different_n_neighbors(simple_test_df):
     """Tests if different n_neighbors values produce different results"""
     data, data_missing = simple_test_df
-    imputer_3 = FaissImputer(n_neighbors=3).fit_transform(data_missing)
-    imputer_7 = FaissImputer(n_neighbors=7).fit_transform(data_missing)
+    data_original = data_missing.copy()
+    imputer_3 = data_missing.copy()
+    imputer_7 = data_missing.copy()
+    FaissImputer(n_neighbors=3).fit_transform(imputer_3)
+    FaissImputer(n_neighbors=7).fit_transform(imputer_7)
+    _base_check_imputation(data_original, imputer_3)
+    _base_check_imputation(data_original, imputer_7)
     assert not np.array_equal(imputer_3, imputer_7)
 
 
 def test_regression_imputation(regression_dataset):
     """Tests if imputed data maintains predictive power in regression task"""
     X, X_missing, y = regression_dataset
-    imputer = FaissImputer(n_neighbors=5)
-    X_imputed = imputer.fit_transform(X_missing)
-    assert not np.isnan(X_imputed).any()
+    X_original = X_missing.copy()
+    FaissImputer(n_neighbors=5).fit_transform(X_missing)
+    _base_check_imputation(X_original, X_missing)
 
     from sklearn.linear_model import LinearRegression
 
     model_orig = LinearRegression().fit(X, y)
-    model_imputed = LinearRegression().fit(X_imputed, y)
+    model_imputed = LinearRegression().fit(X_missing, y)
 
     score_orig = model_orig.score(X, y)
-    score_imputed = model_imputed.score(X_imputed, y)
+    score_imputed = model_imputed.score(X_missing, y)
     assert abs(score_orig - score_imputed) < 0.1
 
 
@@ -140,6 +173,21 @@ def test_no_full_rows():
             [np.nan, 97.29442362, np.nan, np.nan, np.nan],
         ]
     )
-    imputer = FaissImputer(n_neighbors=1)
-    arr_imputed = imputer.fit_transform(arr)
-    assert not np.isnan(arr_imputed).any()
+    arr_original = arr.copy()
+    FaissImputer(n_neighbors=1).fit_transform(arr)
+    _base_check_imputation(arr_original, arr)
+
+
+def _are_ndarrays_equal(arr1: np.ndarray, arr2: np.ndarray) -> np.bool_:
+    """Check if two arrays are equal member-wise.
+
+    Note: Two NaN are considered equal.
+
+    Args:
+        arr1: First array to compare
+        arr2: Second array to compare
+
+    Returns:
+        True if the two arrays are equal member-wise
+    """
+    return np.all(np.equal(arr1, arr2, dtype=object) | ((arr1 != arr1) & (arr2 != arr2)))
