@@ -17,8 +17,8 @@ Help is more than welcome!
 
 Please refer to the [documentation][link-docs]. In particular, the
 
--   [API documentation][link-api].
--   [Faiss example notebook][link-faiss-example].
+- [API documentation][link-api].
+- [Faiss example notebook][link-faiss-example].
 
 ## Installation
 
