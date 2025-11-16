@@ -1,8 +1,8 @@
-from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
 from sklearn.datasets import make_regression
+
 from fknni.faiss.faiss import FaissImputer
 
 
@@ -55,7 +55,6 @@ def _base_check_imputation(
     if not _are_ndarrays_equal(data_original[imputed_non_nan_mask], data_imputed[imputed_non_nan_mask]):
         raise AssertionError("Non-NaN values in imputed columns were modified.")
 
-    # If reaching here: all checks passed
     return
 
 
@@ -163,6 +162,66 @@ def test_no_full_rows():
     arr_original = arr.copy()
     FaissImputer(n_neighbors=1).fit_transform(arr)
     _base_check_imputation(arr_original, arr)
+
+
+def test_3d_flatten_imputation(rng):
+    """Tests if 3D imputation with flatten mode successfully fills all NaN values"""
+    data_3d = rng.uniform(0, 100, size=(10, 5, 3))
+    data_missing = data_3d.copy()
+    indices = [
+        (i, j, k) for i in range(data_3d.shape[0]) for j in range(data_3d.shape[1]) for k in range(data_3d.shape[2])
+    ]
+    rng.shuffle(indices)
+    for i, j, k in indices[:20]:
+        data_missing[i, j, k] = np.nan
+
+    data_original = data_missing.copy()
+    FaissImputer(n_neighbors=5, temporal_mode="flatten").fit_transform(data_missing)
+    _base_check_imputation(data_original, data_missing)
+    assert data_missing.shape == (10, 5, 3)
+
+
+def test_3d_per_variable_imputation(rng):
+    """Tests if 3D imputation with per_variable mode successfully fills all NaN values"""
+    data_3d = rng.uniform(0, 100, size=(10, 5, 3))
+    data_missing = data_3d.copy()
+    indices = [
+        (i, j, k) for i in range(data_3d.shape[0]) for j in range(data_3d.shape[1]) for k in range(data_3d.shape[2])
+    ]
+    rng.shuffle(indices)
+    for i, j, k in indices[:20]:
+        data_missing[i, j, k] = np.nan
+
+    data_original = data_missing.copy()
+    FaissImputer(n_neighbors=5, temporal_mode="per_variable").fit_transform(data_missing)
+    _base_check_imputation(data_original, data_missing)
+    assert data_missing.shape == (10, 5, 3)
+
+
+def test_3d_modes_produce_different_results(rng):
+    """Tests if flatten and per_variable modes produce different results"""
+    data_3d = rng.uniform(0, 100, size=(10, 5, 3))
+    data_missing = data_3d.copy()
+    indices = [
+        (i, j, k) for i in range(data_3d.shape[0]) for j in range(data_3d.shape[1]) for k in range(data_3d.shape[2])
+    ]
+    rng.shuffle(indices)
+    for i, j, k in indices[:20]:
+        data_missing[i, j, k] = np.nan
+
+    data_flatten = data_missing.copy()
+    data_per_var = data_missing.copy()
+
+    FaissImputer(n_neighbors=5, temporal_mode="flatten").fit_transform(data_flatten)
+    FaissImputer(n_neighbors=5, temporal_mode="per_variable").fit_transform(data_per_var)
+
+    assert not np.array_equal(data_flatten, data_per_var)
+
+
+def test_invalid_temporal_mode():
+    """Tests if imputer raises error for invalid temporal_mode"""
+    with pytest.raises(ValueError):
+        FaissImputer(temporal_mode="invalid")
 
 
 def _are_ndarrays_equal(arr1: np.ndarray, arr2: np.ndarray) -> np.bool_:
