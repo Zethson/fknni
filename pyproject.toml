@@ -129,6 +129,10 @@ testpaths = [ "tests" ]
 xfail_strict = true
 addopts = [
   "--import-mode=importlib", # allow using test files with same name
+  "-m not gpu",
+]
+markers = [
+  "gpu: mark test to run on GPU",
 ]
 
 [tool.coverage.run]
