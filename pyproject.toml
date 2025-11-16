@@ -63,9 +63,9 @@ optional-dependencies.test = [
   "coverage",
   "pytest",
 ]
-optional-dependencies.urls.Documentation = "https://fknni.readthedocs.io/"
-optional-dependencies.urls.Homepage = "https://github.com/zethson/fknni"
-optional-dependencies.urls.Source = "https://github.com/zethson/fknni"
+urls.Documentation = "https://fknni.readthedocs.io/"
+urls.Homepage = "https://github.com/zethson/fknni"
+urls.Source = "https://github.com/zethson/fknni"
 
 [tool.hatch.envs.default]
 installer = "uv"
