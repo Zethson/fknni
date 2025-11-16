@@ -4,6 +4,12 @@ on:
   release:
     types: [published]
 
+defaults:
+  run:
+    # to fail on error in multiline statements (-e), in pipes (-o pipefail), and on unset variables (-u).
+    shell: bash -euo pipefail {0}
+
+# Use "trusted publishing", see https://docs.pypi.org/trusted-publishers/
 jobs:
   release:
     name: Upload release to PyPI
@@ -14,16 +20,15 @@ jobs:
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           filter: blob:none
           fetch-depth: 0
-
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.x"
-          cache: "pip"
-      - run: pip install build
-      - run: python -m build
+          cache-dependency-glob: pyproject.toml
+      - name: Build package
+        run: uv build
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
