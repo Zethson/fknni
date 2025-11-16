@@ -50,7 +50,7 @@ jobs:
           cache-dependency-glob: pyproject.toml
 
       - name: Install fknni
-        run: uv pip install --system -e "."
+        run: uv pip install --system -e ".[test]"
       - name: Pip list
         run: pip list
 
