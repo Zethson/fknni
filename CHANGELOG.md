@@ -8,8 +8,21 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [Unreleased]
+## [1.2.0]
+
+- Iterative imputation for very sparse datasets
+
+## [1.1.1]
+
+- Python 3.9 compatibility
+
+## [1.1.0]
+
+- Fixed mean imputation
+
+## [1.0.0]
 
 ### Added
 
--   Basic tool, preprocessing and plotting functions
+- First implementation of FaissImputer
+- mean, median, weighted for strategies

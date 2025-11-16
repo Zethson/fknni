@@ -19,3 +19,11 @@ __pycache__/
 # docs
 /docs/generated/
 /docs/_build/
+
+# IDEs
+/.idea/
+/.vscode/
+
+node_modules
+test.ipynb
+*.h5ad

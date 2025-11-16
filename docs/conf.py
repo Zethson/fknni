@@ -1,10 +1,3 @@
-# Configuration file for the Sphinx documentation builder.
-
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
-
-# -- Path setup --------------------------------------------------------------
 import sys
 from datetime import datetime
 from importlib.metadata import metadata
@@ -16,8 +9,6 @@ sys.path.insert(0, str(HERE / "extensions"))
 
 # -- Project information -----------------------------------------------------
 
-# NOTE: If you installed your project in editable mode, this might be stale.
-#       If this is the case, reinstall it to refresh the metadata
 info = metadata("fknni")
 project_name = info["Name"]
 author = info["Author"]
@@ -37,7 +28,7 @@ needs_sphinx = "4.0"
 html_context = {
     "display_github": True,  # Integrate GitHub
     "github_user": "zethson",
-    "github_repo": project_name,
+    "github_repo": "fknni",
     "github_version": "main",
     "conf_py_path": "/docs/",
 }
@@ -65,8 +56,8 @@ extensions = [
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 default_role = "literal"
-napoleon_google_docstring = False
-napoleon_numpy_docstring = True
+napoleon_google_docstring = True
+napoleon_numpy_docstring = False
 napoleon_include_init_with_doc = False
 napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
@@ -96,6 +87,8 @@ intersphinx_mapping = {
     "anndata": ("https://anndata.readthedocs.io/en/stable/", None),
     "scanpy": ("https://scanpy.readthedocs.io/en/stable/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
+    "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
+    "sklearn": ("https://scikit-learn.org/stable/", None),
 }
 
 # List of patterns, relative to source directory, that match files and
@@ -124,7 +117,7 @@ html_theme_options = {
 
 pygments_style = "default"
 
-nitpick_ignore = [
+nitpick_ignore: list[tuple[str, str]] = [
     # If building the documentation fails because of a missing link that is outside your control,
     # you can add an exception to this list.
     #     ("py:class", "igraph.Graph"),
