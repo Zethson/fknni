@@ -2,5 +2,5 @@ import pytest
 
 
 @pytest.mark.gpu
-def gpu_test():
+def test_gpu():
     assert 1 + 1 == 2
