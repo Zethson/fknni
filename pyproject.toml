@@ -45,14 +45,27 @@ optional-dependencies.doc = [
   "sphinxcontrib-bibtex>=1",
   "sphinxext-opengraph",
 ]
+optional-dependencies.rapids12 = [
+  "cudf-cu12>=25.10",
+  "cugraph-cu12>=25.10",
+  "cuml-cu12>=25.10",
+  "cupy-cuda12x",
+  "cuvs-cu12>=25.10",
+]
+optional-dependencies.rapids13 = [
+  "cudf-cu13>=25.10",
+  "cugraph-cu13>=25.10",
+  "cuml-cu13>=25.10",
+  "cupy-cuda13x",
+  "cuvs-cu13>=25.10",
+]
 optional-dependencies.test = [
   "coverage",
   "pytest",
 ]
-
-urls.Documentation = "https://fknni.readthedocs.io/"
-urls.Homepage = "https://github.com/zethson/fknni"
-urls.Source = "https://github.com/zethson/fknni"
+optional-dependencies.urls.Documentation = "https://fknni.readthedocs.io/"
+optional-dependencies.urls.Homepage = "https://github.com/zethson/fknni"
+optional-dependencies.urls.Source = "https://github.com/zethson/fknni"
 
 [tool.hatch.envs.default]
 installer = "uv"
