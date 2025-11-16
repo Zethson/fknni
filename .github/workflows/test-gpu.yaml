@@ -39,10 +39,14 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
           cache-dependency-glob: pyproject.toml
 
       - name: Install fknni
