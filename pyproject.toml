@@ -45,6 +45,7 @@ optional-dependencies.doc = [
   "sphinxcontrib-bibtex>=1",
   "sphinxext-opengraph",
 ]
+optional-dependencies.faissgpu = [ "faiss-gpu-cu12" ]
 optional-dependencies.rapids12 = [
   "cudf-cu12>=25.10",
   "cugraph-cu12>=25.10",
@@ -142,6 +143,7 @@ testpaths = [ "tests" ]
 xfail_strict = true
 addopts = [
   "--import-mode=importlib", # allow using test files with same name
+  "-m not gpu",
 ]
 markers = [
   "gpu: mark test to run on GPU",
