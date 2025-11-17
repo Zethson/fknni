@@ -9,6 +9,13 @@ from lamin_utils import logger
 from numpy import dtype
 from sklearn.base import BaseEstimator, TransformerMixin
 
+try:
+    import faiss
+
+    HAS_FAISS_GPU = hasattr(faiss, "StandardGpuResources")
+except ImportError:
+    raise ImportError("faiss-cpu or faiss-gpu required") from None
+
 
 class FaissImputer(BaseEstimator, TransformerMixin):
     """Imputer for completing missing values using Faiss, incorporating weighted averages based on distance."""
@@ -23,6 +30,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
         index_factory: str = "Flat",
         min_data_ratio: float = 0.25,
         temporal_mode: Literal["flatten", "per_variable"] = "flatten",
+        use_gpu: bool = False,
     ):
         """Initializes FaissImputer with specified parameters that are used for the imputation.
 
@@ -39,6 +47,7 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             temporal_mode: How to handle 3D temporal data. 'flatten' treats all (variable, timestep) pairs as
                        independent features (fast but allows temporal leakage).
                        'per_variable' imputes each variable independently across time (slower but respects temporal causality).
+            use_gpu: Whether to train using GPU.
         """
         if n_neighbors < 1:
             raise ValueError("n_neighbors must be at least 1.")
@@ -46,6 +55,10 @@ class FaissImputer(BaseEstimator, TransformerMixin):
             raise ValueError("Unknown strategy. Choose one of 'mean', 'median', 'weighted'")
         if temporal_mode not in {"flatten", "per_variable"}:
             raise ValueError("Unknown temporal_mode. Choose one of 'flatten', 'per_variable'")
+
+        self.use_gpu = use_gpu
+        if use_gpu and not HAS_FAISS_GPU:
+            raise ValueError("use_gpu=True requires faiss-gpu package, install with: pip install faiss-gpu") from None
 
         self.missing_values = missing_values
         self.n_neighbors = n_neighbors
@@ -236,6 +249,11 @@ class FaissImputer(BaseEstimator, TransformerMixin):
     def _train(self, x_train: np.ndarray) -> faiss.Index:
         index = faiss.index_factory(x_train.shape[1], self.index_factory)
         index.metric_type = faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNER_PRODUCT
+
+        if self.use_gpu:
+            res = faiss.StandardGpuResources()
+            index = faiss.index_cpu_to_gpu(res, 0, index)
+
         index.train(x_train)
         index.add(x_train)
         return index

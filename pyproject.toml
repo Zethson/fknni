@@ -21,7 +21,6 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-  "faiss-cpu",
   "lamin-utils",
   "pandas",
   "scikit-learn",
@@ -45,6 +44,8 @@ optional-dependencies.doc = [
   "sphinxcontrib-bibtex>=1",
   "sphinxext-opengraph",
 ]
+optional-dependencies.faisscpu = [ "faiss-cpu" ]
+optional-dependencies.faissgpu = [ "faiss-gpu-cu12" ]
 optional-dependencies.rapids12 = [
   "cudf-cu12>=25.10",
   "cugraph-cu12>=25.10",
@@ -88,7 +89,7 @@ deps = [ "pre" ]
 python = [ "3.13" ]
 
 [tool.hatch.envs.hatch-test]
-features = [ "dev", "test" ]
+features = [ "dev", "test", "faisscpu" ]
 
 [tool.hatch.envs.hatch-test.overrides]
 # If the matrix variable `deps` is set to "pre",
@@ -142,6 +143,7 @@ testpaths = [ "tests" ]
 xfail_strict = true
 addopts = [
   "--import-mode=importlib", # allow using test files with same name
+  "-m not gpu",
 ]
 markers = [
   "gpu: mark test to run on GPU",
