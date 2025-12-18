@@ -40,7 +40,7 @@ jobs:
         run: nvidia-smi
 
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -50,7 +50,7 @@ jobs:
           cache-dependency-glob: pyproject.toml
 
       - name: Install fknni
-        run: uv pip install --system -e ".[test,faissgpu]"
+        run: uv pip install --system -e ".[test,faissgpu,rapids12]"
       - name: Pip list
         run: pip list
 
