@@ -10,9 +10,11 @@ from numpy import dtype
 from sklearn.base import BaseEstimator, TransformerMixin
 
 try:
+    from importlib.metadata import distributions
+
     import faiss
 
-    HAS_FAISS_GPU = hasattr(faiss, "StandardGpuResources")
+    HAS_FAISS_GPU = any(d.metadata["Name"].startswith("faiss-gpu") for d in distributions())
 except ImportError:
     raise ImportError("faiss-cpu or faiss-gpu required") from None
 
@@ -190,79 +192,117 @@ class FastKNNImputer(BaseEstimator, TransformerMixin):
         if xp.isnan(self.X_full).all(axis=0).any():
             raise ValueError("Features with only missing values cannot be handled.")
 
+        # Prepare fallback values, used to prefill the query vectors nan´s
+        # or as an imputation fallback if we can't build an index
         global_fallbacks_ = (
             xp.nanmean(self.X_full, axis=0)
             if self.strategy in ["mean", "weighted"]
             else xp.nanmedian(self.X_full, axis=0)
         )
 
+        # We will need to impute all features having nan´s
         feature_indices_to_impute = [i for i in range(self.X_full.shape[1]) if xp.isnan(self.X_full[:, i]).any()]
 
+        # Now impute iteratively
         while feature_indices_to_impute:
             feature_indices_being_imputed, training_indices, training_data, index = self._fit_train_imputer(
                 feature_indices_to_impute
             )
 
+            # Use fallback data if we can't build an index and iterate again
             if index is None:
                 self._warn_fallback()
                 self.X_full[:, feature_indices_being_imputed] = global_fallbacks_[feature_indices_being_imputed]
                 continue
 
+            # Extract the features from X that was used to train the index, and compute the sparseness matrix
             x_imputed = self.X_full[:, training_indices]
             x_imputed_missing_mask = xp.isnan(x_imputed)
 
-            rows_to_impute = xp.where(x_imputed_missing_mask.any(axis=1))[0]
-            if array_api_compat.is_cupy_array(X):
-                rows_to_impute = rows_to_impute.get()
+            row_indices = xp.where(x_imputed_missing_mask.any(axis=1))[0]
+            n_rows = row_indices.shape[0]
 
-            for idx in rows_to_impute:
-                sample_missing_mask = x_imputed_missing_mask[idx]
-                sample = x_imputed[idx].copy()
+            if n_rows == 0:
+                # No rows to impute, transfer back and continue
+                n_imputed = len(feature_indices_being_imputed)
+                self.X_full[:, feature_indices_being_imputed] = x_imputed[:, xp.arange(n_imputed)]
+                feature_indices_to_impute = [
+                    fi for fi in feature_indices_to_impute if fi not in feature_indices_being_imputed
+                ]
+                continue
 
-                sample[sample_missing_mask] = global_fallbacks_[training_indices][sample_missing_mask]
-                missing_cols = xp.where(sample_missing_mask)[0]
+            # Batch prefill: replace NaNs with fallback values for all query rows
+            queries = x_imputed[row_indices].copy()
+            query_missing_mask = x_imputed_missing_mask[row_indices]
+            fallbacks_for_training = global_fallbacks_[training_indices]
+            queries = xp.where(query_missing_mask, fallbacks_for_training, queries)
 
-                distances, indices = index.search(sample.reshape(1, -1), self.n_neighbors)
+            # Batch search: single call for all queries
+            distances, indices = index.search(queries, self.n_neighbors)
 
-                valid_mask = indices[0] >= 0
-                valid_indices = indices[0][valid_mask]
-                valid_distances = distances[0][valid_mask]
+            # Check for invalid indices (FAISS returns -1 for not found)
+            valid_mask = indices >= 0
+            any_invalid = ~valid_mask.all()
 
-                n_valid = int(valid_indices.shape[0])
-
-                if n_valid == 0:
+            if any_invalid:
+                if not valid_mask.any():
+                    # No valid neighbors found at all, use fallback
                     self._warn_fallback()
-                    x_imputed[idx, missing_cols] = sample[missing_cols]
+                    n_imputed = len(feature_indices_being_imputed)
+                    self.X_full[:, feature_indices_being_imputed] = x_imputed[:, xp.arange(n_imputed)]
+                    feature_indices_to_impute = [
+                        fi for fi in feature_indices_to_impute if fi not in feature_indices_being_imputed
+                    ]
                     continue
 
-                if n_valid < self.n_neighbors and not self.warned_unsufficient_neighbors:
+                if not self.warned_unsufficient_neighbors:
                     warnings.warn(
-                        "Couldn't find all requested neighbors. This warning will be displayed only once.",
+                        "Couldn't find all requested neighbors for some samples. This warning will be displayed only once.",
                         stacklevel=2,
                     )
                     self.warned_unsufficient_neighbors = True
 
-                neighbors = training_data[valid_indices]
+            # Retrieve all neighbors: shape (n_rows, n_neighbors, n_features)
+            # Clamp negative indices to 0 for gathering, then mask later
+            safe_indices = xp.where(valid_mask, indices, 0)
+            all_neighbors = training_data[safe_indices]
 
-                if self.strategy == "weighted":
-                    weights = 1 / (valid_distances + 1e-10)
-                    weights = weights[:, xp.newaxis]
-                    neighbor_vals = neighbors[:, missing_cols]
-                    weighted_sum = xp.nansum(neighbor_vals * weights, axis=0)
-                    weight_sum = xp.nansum(weights, axis=0)
-                    x_imputed[idx, missing_cols] = weighted_sum / weight_sum
-                else:
-                    agg_func = xp.nanmean if self.strategy == "mean" else xp.nanmedian
-                    x_imputed[idx, missing_cols] = agg_func(neighbors[:, missing_cols], axis=0)
+            # Compute imputed values based on strategy
+            if self.strategy == "weighted":
+                # Weights: (n_rows, n_neighbors, 1)
+                weights = 1.0 / (distances + 1e-10)
+                weights = xp.where(valid_mask, weights, 0.0)
+                weights = weights[:, :, xp.newaxis]
 
+                # Weighted sum across neighbors
+                weighted_vals = all_neighbors * weights
+                weighted_sum = weighted_vals.sum(axis=1)
+                weight_sum = weights.sum(axis=1)
+                imputed_rows = weighted_sum / (weight_sum + 1e-10)
+            elif self.strategy == "mean":
+                # Mask invalid neighbors with NaN, then nanmean
+                all_neighbors = xp.where(valid_mask[:, :, xp.newaxis], all_neighbors, xp.nan)
+                imputed_rows = xp.nanmean(all_neighbors, axis=1)
+            else:  # median
+                all_neighbors = xp.where(valid_mask[:, :, xp.newaxis], all_neighbors, xp.nan)
+                imputed_rows = xp.nanmedian(all_neighbors, axis=1)
+
+            # Only update the missing positions
+            x_imputed[row_indices] = xp.where(query_missing_mask, imputed_rows, x_imputed[row_indices])
+
+            # Transfer back to X
+            # Features added by _fit_train_imputer for training purpose only are placed on the right
+            # so we can just select the features on the left
             n_imputed = len(feature_indices_being_imputed)
             self.X_full[:, feature_indices_being_imputed] = x_imputed[:, xp.arange(n_imputed)]
 
+            # Remove the imputed features from the to-do list
             feature_indices_to_impute = [
                 fi for fi in feature_indices_to_impute if fi not in feature_indices_being_imputed
             ]
 
         assert not xp.isnan(self.X_full).any()
+
         return self.X_full
 
     def _fit_train_imputer(
@@ -290,7 +330,9 @@ class FastKNNImputer(BaseEstimator, TransformerMixin):
             non_missing_rows = ~xp.isnan(x_subset).any(axis=1)
             x_non_missing = x_subset[non_missing_rows]
 
+            # Check if we have enough data
             if x_non_missing.shape[0] >= self.X_full.shape[0] * self.min_data_ratio:
+                # We have our list of features to impute!
                 return (
                     features_indices_to_impute,
                     train_indices,
@@ -298,9 +340,11 @@ class FastKNNImputer(BaseEstimator, TransformerMixin):
                     self._train(x_non_missing),
                 )
             else:
+                # One feature left, meaning we can't build an index
                 if len(features_indices_to_impute) <= 1:
                     return list(features_indices), None, None, None
 
+                # Remove the feature containing the largest amount of nan´s and iterate again
                 for value in self._features_indices_sorted_descending_on_nan():
                     if value in features_indices_to_impute:
                         features_indices_to_impute.remove(value)

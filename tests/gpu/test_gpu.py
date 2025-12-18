@@ -1,7 +1,7 @@
 import pytest
 from tests.compare_predictions import _base_check_imputation
 
-from fknni.faiss.faiss import FastKNNImputer
+from fknni.knn.knn import FastKNNImputer
 
 cupy = pytest.importorskip("cupy")
 

@@ -3,7 +3,7 @@ import pytest
 from sklearn.datasets import make_regression
 from tests.compare_predictions import _base_check_imputation
 
-from fknni.faiss.faiss import FastKNNImputer
+from fknni.knn.knn import FastKNNImputer
 
 
 @pytest.fixture
