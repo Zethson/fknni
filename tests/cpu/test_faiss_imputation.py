@@ -3,7 +3,7 @@ import pytest
 from sklearn.datasets import make_regression
 from tests.compare_predictions import _base_check_imputation
 
-from fknni.faiss.faiss import FaissImputer
+from fknni.faiss.faiss import FastKNNImputer
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def test_median_imputation(simple_test_df):
     """Tests if median imputation successfully fills all NaN values"""
     data, data_missing = simple_test_df
     data_original = data_missing.copy()
-    FaissImputer(n_neighbors=5, strategy="median").fit_transform(data_missing)
+    FastKNNImputer(n_neighbors=5, strategy="median").fit_transform(data_missing)
     _base_check_imputation(data_original, data_missing)
 
 
@@ -29,7 +29,7 @@ def test_mean_imputation(simple_test_df):
     """Tests if mean imputation successfully fills all NaN values"""
     data, data_missing = simple_test_df
     data_original = data_missing.copy()
-    FaissImputer(n_neighbors=5, strategy="mean").fit_transform(data_missing)
+    FastKNNImputer(n_neighbors=5, strategy="mean").fit_transform(data_missing)
     _base_check_imputation(data_original, data_missing)
 
 
@@ -37,7 +37,7 @@ def test_imputer_with_no_missing_values(simple_test_df):
     """Tests if imputer preserves data when no values are missing"""
     data, _ = simple_test_df
     data_original = data.copy()
-    FaissImputer(n_neighbors=5, strategy="median").fit_transform(data)
+    FastKNNImputer(n_neighbors=5, strategy="median").fit_transform(data)
     _base_check_imputation(data_original, data)
 
 
@@ -47,7 +47,7 @@ def test_imputer_with_all_nan_column(rng):
     data_missing = data.copy()
     data_missing[:, 2] = np.nan
     with pytest.raises(ValueError):
-        FaissImputer(n_neighbors=5).fit_transform(data_missing)
+        FastKNNImputer(n_neighbors=5).fit_transform(data_missing)
 
 
 def test_imputer_with_all_nan_row(rng):
@@ -57,7 +57,7 @@ def test_imputer_with_all_nan_row(rng):
     data_missing = data.copy()
     data_original = data.copy()
 
-    FaissImputer(n_neighbors=5).fit_transform(data_missing)
+    FastKNNImputer(n_neighbors=5).fit_transform(data_missing)
 
     _base_check_imputation(data_original, data_missing)
 
@@ -68,8 +68,8 @@ def test_imputer_different_n_neighbors(simple_test_df):
     data_original = data_missing.copy()
     imputer_3 = data_missing.copy()
     imputer_7 = data_missing.copy()
-    FaissImputer(n_neighbors=3).fit_transform(imputer_3)
-    FaissImputer(n_neighbors=7).fit_transform(imputer_7)
+    FastKNNImputer(n_neighbors=3).fit_transform(imputer_3)
+    FastKNNImputer(n_neighbors=7).fit_transform(imputer_7)
     _base_check_imputation(data_original, imputer_3)
     _base_check_imputation(data_original, imputer_7)
     assert not np.array_equal(imputer_3, imputer_7)
@@ -79,7 +79,7 @@ def test_regression_imputation(regression_dataset):
     """Tests if imputed data maintains predictive power in regression task"""
     X, X_missing, y = regression_dataset
     X_original = X_missing.copy()
-    FaissImputer(n_neighbors=5).fit_transform(X_missing)
+    FastKNNImputer(n_neighbors=5).fit_transform(X_missing)
     _base_check_imputation(X_original, X_missing)
 
     from sklearn.linear_model import LinearRegression
@@ -95,15 +95,15 @@ def test_regression_imputation(regression_dataset):
 def test_invalid_strategy():
     """Tests if imputer raises error for invalid strategy"""
     with pytest.raises(ValueError):
-        FaissImputer(strategy="invalid")
+        FastKNNImputer(strategy="invalid")
 
 
 def test_invalid_n_neighbors():
     """Tests if imputer raises error for invalid n_neighbors values"""
     with pytest.raises(ValueError):
-        FaissImputer(n_neighbors=0)
+        FastKNNImputer(n_neighbors=0)
     with pytest.raises(ValueError):
-        FaissImputer(n_neighbors=-1)
+        FastKNNImputer(n_neighbors=-1)
 
 
 def test_no_full_rows():
@@ -119,7 +119,7 @@ def test_no_full_rows():
         ]
     )
     arr_original = arr.copy()
-    FaissImputer(n_neighbors=1).fit_transform(arr)
+    FastKNNImputer(n_neighbors=1).fit_transform(arr)
     _base_check_imputation(arr_original, arr)
 
 
@@ -135,7 +135,7 @@ def test_3d_flatten_imputation(rng):
         data_missing[i, j, k] = np.nan
 
     data_original = data_missing.copy()
-    FaissImputer(n_neighbors=5, temporal_mode="flatten").fit_transform(data_missing)
+    FastKNNImputer(n_neighbors=5, temporal_mode="flatten").fit_transform(data_missing)
     _base_check_imputation(data_original, data_missing)
     assert data_missing.shape == (10, 5, 3)
 
@@ -152,7 +152,7 @@ def test_3d_per_variable_imputation(rng):
         data_missing[i, j, k] = np.nan
 
     data_original = data_missing.copy()
-    FaissImputer(n_neighbors=5, temporal_mode="per_variable").fit_transform(data_missing)
+    FastKNNImputer(n_neighbors=5, temporal_mode="per_variable").fit_transform(data_missing)
     _base_check_imputation(data_original, data_missing)
     assert data_missing.shape == (10, 5, 3)
 
@@ -171,8 +171,8 @@ def test_3d_modes_produce_different_results(rng):
     data_flatten = data_missing.copy()
     data_per_var = data_missing.copy()
 
-    FaissImputer(n_neighbors=5, temporal_mode="flatten").fit_transform(data_flatten)
-    FaissImputer(n_neighbors=5, temporal_mode="per_variable").fit_transform(data_per_var)
+    FastKNNImputer(n_neighbors=5, temporal_mode="flatten").fit_transform(data_flatten)
+    FastKNNImputer(n_neighbors=5, temporal_mode="per_variable").fit_transform(data_per_var)
 
     assert not np.array_equal(data_flatten, data_per_var)
 
@@ -180,4 +180,4 @@ def test_3d_modes_produce_different_results(rng):
 def test_invalid_temporal_mode():
     """Tests if imputer raises error for invalid temporal_mode"""
     with pytest.raises(ValueError):
-        FaissImputer(temporal_mode="invalid")
+        FastKNNImputer(temporal_mode="invalid")

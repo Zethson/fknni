@@ -74,7 +74,7 @@ class CuMLIndexWrapper:
         return distances, indices
 
 
-class FaissImputer(BaseEstimator, TransformerMixin):
+class FastKNNImputer(BaseEstimator, TransformerMixin):
     """Imputer for completing missing values using Faiss or cuML, incorporating weighted averages based on distance.
 
     Supports both numpy arrays (using FAISS) and cupy arrays (using cuML) for GPU-accelerated imputation.
@@ -380,3 +380,15 @@ class FaissImputer(BaseEstimator, TransformerMixin):
                 stacklevel=2,
             )
             self.warned_fallback = True
+
+
+class FaissImputer(FastKNNImputer):
+    """Deprecated: Use FastKNNImputer instead."""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "FaissImputer is deprecated, use FastKNNImputer instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)

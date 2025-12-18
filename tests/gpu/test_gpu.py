@@ -1,7 +1,7 @@
 import pytest
 from tests.compare_predictions import _base_check_imputation
 
-from fknni.faiss.faiss import FaissImputer
+from fknni.faiss.faiss import FastKNNImputer
 
 cupy = pytest.importorskip("cupy")
 
@@ -11,7 +11,7 @@ def test_median_imputation_faiss(simple_test_df):
     """Tests if median imputation successfully fills all NaN values"""
     _, data_missing = simple_test_df
     data_original = data_missing.copy()
-    FaissImputer(n_neighbors=5, strategy="median", use_gpu=True).fit_transform(data_missing)
+    FastKNNImputer(n_neighbors=5, strategy="median", use_gpu=True).fit_transform(data_missing)
     _base_check_imputation(data_original, data_missing)
 
 
@@ -22,7 +22,7 @@ def test_median_imputation_cupy(simple_test_df):
     data_missing_cp = cupy.asarray(data_missing)
     data_original_cp = data_missing_cp.copy()
 
-    result = FaissImputer(n_neighbors=5, strategy="median").fit_transform(data_missing_cp)
+    result = FastKNNImputer(n_neighbors=5, strategy="median").fit_transform(data_missing_cp)
 
     assert isinstance(result, cupy.ndarray), f"Expected cupy array, got {type(result)}"
     assert not cupy.isnan(result).any(), "NaNs remain after imputation"
@@ -36,7 +36,7 @@ def test_cupy_strategies(simple_test_df, strategy):
     _, data_missing = simple_test_df
     data_missing_cp = cupy.asarray(data_missing)
 
-    result = FaissImputer(n_neighbors=5, strategy=strategy).fit_transform(data_missing_cp)
+    result = FastKNNImputer(n_neighbors=5, strategy=strategy).fit_transform(data_missing_cp)
 
     assert isinstance(result, cupy.ndarray)
     assert not cupy.isnan(result).any()
@@ -49,7 +49,7 @@ def test_cupy_numpy_produce_same_results(simple_test_df):
     data_missing_np = data_missing.copy()
     data_missing_cp = cupy.asarray(data_missing.copy())
 
-    result_np = FaissImputer(n_neighbors=5, strategy="mean").fit_transform(data_missing_np)
-    result_cp = FaissImputer(n_neighbors=5, strategy="mean").fit_transform(data_missing_cp)
+    result_np = FastKNNImputer(n_neighbors=5, strategy="mean").fit_transform(data_missing_np)
+    result_cp = FastKNNImputer(n_neighbors=5, strategy="mean").fit_transform(data_missing_cp)
 
     cupy.testing.assert_allclose(result_cp, cupy.asarray(result_np), rtol=1e-5)

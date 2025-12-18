@@ -1,1 +1,1 @@
-from .faiss import FaissImputer
+from .faiss import FastKNNImputer
