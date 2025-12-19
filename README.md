@@ -11,7 +11,7 @@ Fast implementations of KNN imputation using faiss.
 Might support more backends such as annoy and GPUs in the future.
 Help is more than welcome!
 
-![image](https://github.com/Zethson/fknni/assets/21954664/216cb745-e0c3-481b-9cae-59bc9a77cdfe)
+![image](docs/_static/images/imputation_speedup_1.png)
 
 ## Getting started
 
