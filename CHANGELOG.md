@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning][].
 
 ## [1.3.0]
 
+- Add support for cupy & cuml ([#23](https://github.com/Zethson/fknni/pull/23)) @zethson
 - Add GPU CI ([#15](https://github.com/zethson/fknni/pull/15)) @zethson
 - Add support for 3D imputation ([#14](https://github.com/zethson/fknni/pull/14)) @zethson
 - Require Python 3.12+ ([#13](https://github.com/zethson/fknni/pull/14)) @zethson
