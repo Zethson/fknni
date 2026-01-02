@@ -80,7 +80,6 @@ class FastKNNImputer(BaseEstimator, TransformerMixin):
     """Imputer for completing missing values using Faiss or cuML, incorporating weighted averages based on distance.
 
     Supports both numpy arrays (using FAISS) and cupy arrays (using cuML) for GPU-accelerated imputation.
-    When cupy arrays are passed, all computations stay on GPU.
     """
 
     def __init__(
@@ -139,13 +138,11 @@ class FastKNNImputer(BaseEstimator, TransformerMixin):
     def fit_transform(  # noqa: D417
         self, X: np.ndarray | cp.ndarray, y: np.ndarray | None = None, **fit_params
     ) -> np.ndarray[Any, dtype[Any]] | cp.ndarray:
-        """Imputes missing values in the data using the fitted Faiss/cuML index. This imputation will be performed in place.
+        """Imputes missing values in the data using the fitted Faiss/cuML index in place.
 
         This imputation will use `min_data_ratio` to check if the index is of sufficient (dimension 0) size to perform a qualitative KNN lookup.
         If not, it will temporarily exclude enough features to reach this threshold and try again.
         If an index still can't be built, it will use fallbacks values as defined by self.strategy.
-
-        For cupy arrays, computation stays entirely on GPU using cuML's NearestNeighbors.
 
         Args:
             X: Input data with potential missing values. Can be 2D (samples × features) or 3D (samples × features × timesteps).
